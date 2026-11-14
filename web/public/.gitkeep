@@ -1,0 +1,11 @@
+# Keeps web/public/ in git even while it is empty.
+#
+# The Dockerfile copies this directory into the runtime image. Git does not
+# track empty directories, so without this file the build context has no
+# web/public and the image build fails with "/app/public: not found" - but
+# only in CI, because the directory exists on a working copy that has ever
+# run `next build`.
+#
+# Static files that must be served from the site root (verification files,
+# favicon.ico for ancient clients) go here. App-level assets like icon.svg
+# live in app/ instead.
