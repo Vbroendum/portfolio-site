@@ -49,9 +49,22 @@ type FetchOptions = {
  */
 const DEFAULT_REVALIDATE = 60;
 
+/**
+ * How long to wait for the API before giving up.
+ *
+ * Without a bound, an API that accepts the connection but never answers - a
+ * proxy in front of a service that is not up yet, say - hangs the caller. At
+ * build time that means `next build` stalls for a minute per page and then
+ * fails, which is how this was found: the production API hostname resolved
+ * through Cloudflare but had nothing behind it. Failing fast lets the page
+ * fall back to its empty state instead.
+ */
+const FETCH_TIMEOUT_MS = 5_000;
+
 async function get<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   const res = await fetch(`${INTERNAL}${path}`, {
     headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     next: {
       tags: opts.tags,
       revalidate: opts.revalidate ?? DEFAULT_REVALIDATE,
