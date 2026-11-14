@@ -7,27 +7,70 @@ CI. Nothing is deployed by hand - see [ci-cd.md](ci-cd.md) for the pipeline.
 ## Layout
 
 ```
-          Cloudflare (DNS + proxy)
-                    │
-          ┌─────────┴──────────┐
-   vbroendum.com        api.vbroendum.com
-          │                    │
-          └──────► Traefik v2.11 (:443) ◄──────┘
+                     Cloudflare edge
+                            |
+                   (no inbound ports open)
+                            |
+                   cloudflared tunnel
+                            |
+              https://127.0.0.1:443  (SNI = the hostname)
+                            |
+                     Traefik v2.11
                   traefik-public overlay
-                    │                │
-              web :3000          api :8080
-                                     │
-                            internal overlay
-                                     │
-                              postgres :5432
-                                     └── uploads volume
+                     |             |
+                 web :3000     api :8080
+                                   |
+                          internal overlay
+                                   |
+                            postgres :5432
+                                   \__ uploads volume
 ```
 
-Only Traefik publishes ports. `web`, `api` and `postgres` are reachable only
-over the overlay networks, and `postgres` is not on `traefik-public` at all.
+Nothing listens on the public internet. The router forwards no ports; traffic
+arrives through the Cloudflare Tunnel that already serves the other services
+on this host, and Traefik routes by `Host` header from there.
 
-Certificates come from Traefik's existing `cloudflare` resolver, which uses the
-DNS-01 challenge - so the records can stay proxied (orange cloud).
+Certificates are issued by Traefik's existing `cloudflare` resolver over the
+DNS-01 challenge.
+
+## Hostnames
+
+| Hostname | Serves |
+| --- | --- |
+| `vbroendum.com` | the site |
+| `www.vbroendum.com` | the site (same router) |
+| `api.vbroendum.com` | the API and `/media` |
+
+Both names are subdomains of one parent, which is what lets the session cookie
+work across them - see
+[configuration.md](configuration.md#cookies-and-origins).
+
+## Routing a new hostname
+
+DNS alone is not enough: the tunnel needs a route, and the tunnel is run from a
+token, so its routes live in the Cloudflare dashboard rather than in a file on
+the server.
+
+In **Zero Trust -> Networks -> Tunnels -> (the tunnel) -> Routes**, add a
+published application:
+
+| Field | Value |
+| --- | --- |
+| Service type | HTTPS |
+| URL | `127.0.0.1:443` |
+| TLS -> Origin Server Name | the hostname being routed |
+
+**Origin Server Name is the part that is easy to miss.** cloudflared connects
+to `127.0.0.1`, so without it the TLS SNI is an IP address, Traefik has no
+router for that, it falls back to its default self-signed certificate, and
+Cloudflare reports 502. Setting it makes Traefik present the real certificate
+it already holds.
+
+Cloudflare creates the DNS record itself when the route is saved. Delete any
+conflicting A/AAAA record for that name first, or it cannot.
+
+Leave the HTTP Host header alone: Traefik routes on it, and cloudflared passes
+the original through.
 
 ## First deploy
 
@@ -44,27 +87,20 @@ It checks that Swarm and the `traefik-public` network are there, creates
 
 Secrets live on the server and never pass through CI.
 
-### 2. DNS
+### 2. Route the hostnames
 
-In Cloudflare, both pointing at the server, proxy on:
-
-| Record | Name |
-| --- | --- |
-| A / AAAA | `vbroendum.com` |
-| A / AAAA | `api.vbroendum.com` |
-
-Set the zone's SSL mode to **Full (strict)**. Anything else gives a 525 once
-Traefik serves a real certificate.
+Add `vbroendum.com`, `www.vbroendum.com` and `api.vbroendum.com` as tunnel
+routes, as described in
+[Routing a new hostname](#routing-a-new-hostname) above. Delete any existing
+A/AAAA record for those names first.
 
 ### 3. GitHub
 
-Add the secrets and variables listed in [ci-cd.md](ci-cd.md#configuration).
+Add the secrets and variables listed in
+[ci-cd.md](ci-cd.md#configuration), including the Tailscale credentials the
+deploy job uses to reach the server.
 
-### 4. Push
-
-```bash
-git push origin main
-```
+### 4. Merge to main
 
 The pipeline builds, pushes and deploys.
 
@@ -77,9 +113,6 @@ ssh victor@debian
 cd ~/stacks/portfolio-site
 ./adminctl.sh create-user -email you@example.com -name "Your Name"
 ```
-
-The helper finds the running container, and says what is actually wrong if the
-stack is not up instead of failing with a confusing "No such container".
 
 Sign in at `https://vbroendum.com/admin/login`.
 
