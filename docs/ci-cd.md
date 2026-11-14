@@ -110,25 +110,53 @@ is worth keeping. Instead the deploy job joins your tailnet for the length of
 the job and leaves when it finishes, so SSH is only ever reachable from inside
 the tailnet.
 
-Set it up once, in the Tailscale admin console:
+Set it up once, in the Tailscale admin console at
+<https://console.tailscale.com>.
 
-1. **Access controls** - allow a CI tag to exist and to be assigned by you:
+**1. Define the tag.** Open **Access controls** and add `tag:ci` to
+`tagOwners`. A tag must exist in the policy file before an OAuth client can be
+given it, so this step comes first:
 
-   ```json
-   "tagOwners": {
-     "tag:ci": ["autogroup:admin"]
-   }
-   ```
+```jsonc
+{
+  "tagOwners": {
+    "tag:ci": ["autogroup:admin"],
+  },
+}
+```
 
-2. **Settings -> OAuth clients -> Generate** with the `auth_keys` write scope
-   and the tag `tag:ci`.
+If `tagOwners` is already there, add the line inside it rather than adding a
+second block. Save, and check the policy still validates.
 
-3. Put the two halves into the `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`
-   secrets.
+**2. Check the tag can reach the server.** A tagged node is not a user, so a
+policy written around `autogroup:member` will not cover it. With the default
+allow-all `acls` there is nothing to do. With anything stricter, add:
 
-The runner shows up in your tailnet as a short-lived `tag:ci` node during a
-deploy and disappears afterwards. If your ACLs restrict traffic, allow
-`tag:ci` to reach the server on port 22.
+```jsonc
+{
+  "action": "accept",
+  "src": ["tag:ci"],
+  "dst": ["debian:22"],
+}
+```
+
+**3. Create the credential.** Go to **Settings -> Trust credentials**
+(<https://console.tailscale.com/admin/settings/trust-credentials>), select
+**Credential -> OAuth**, tick the **write** box for the **auth_keys** scope,
+and pick `tag:ci` in the tag selector that appears. Select **Generate
+credential**.
+
+**4. Store both halves.** The secret is shown once and cannot be retrieved
+later:
+
+```bash
+gh secret set TS_OAUTH_CLIENT_ID --body "<client id>"
+gh secret set TS_OAUTH_SECRET --body "<client secret>"
+```
+
+The runner joins the tailnet as a short-lived `tag:ci` node for the length of
+the deploy and disappears afterwards, so it shows up under **Machines** only
+while a deploy is running.
 
 ### A deploy key worth having
 
