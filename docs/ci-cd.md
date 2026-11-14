@@ -145,16 +145,25 @@ cat ~/.ssh/portfolio-deploy
 
 Deploying on green only works if nothing can reach `main` ungreen:
 
+This is already applied. To change it, edit the payload and re-run. Note that
+the `-f` flag form does not encode the nested `required_status_checks` arrays -
+it returns 200 and protects nothing - so pass a JSON body instead:
+
 ```bash
-gh api -X PUT repos/Vbroendum/portfolio-site/branches/main/protection \
-  -H "Accept: application/vnd.github+json" \
-  -f 'required_status_checks[strict]=true' \
-  -f 'required_status_checks[contexts][]=api (go)' \
-  -f 'required_status_checks[contexts][]=web (next.js)' \
-  -f 'required_status_checks[contexts][]=stack file' \
-  -F 'enforce_admins=false' \
-  -F 'required_pull_request_reviews=null' \
-  -F 'restrictions=null'
+cat > protection.json <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["api (go)", "web (next.js)", "stack file"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
+gh api -X PUT repos/Vbroendum/portfolio-site/branches/main/protection   --input protection.json
 ```
 
 Reviews are left off because you are the only author; the status checks are the
