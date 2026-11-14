@@ -49,7 +49,7 @@ export default async function BlogPage({ searchParams }: Props) {
 
       {posts.items.length === 0 ? (
         <div className="mt-10">
-          <EmptyState hint="Write one in the CMS at /admin/posts.">
+          <EmptyState authoringHint="Write one in the CMS at /admin/posts.">
             {`Nothing tagged "${tag}" yet.`}
           </EmptyState>
         </div>

@@ -55,11 +55,16 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-8 font-mono text-[11px] text-faint">
-        No account yet? Create one on the server with:
-        <br />
-        <code>go run ./cmd/adminctl create-user -email you@example.com</code>
-      </p>
+      {/* Only outside production. /admin/login is reachable by anyone who
+          guesses the URL, and there is no reason to show them the stack or the
+          command that creates accounts. */}
+      {process.env.NODE_ENV !== "production" ? (
+        <p className="mt-8 font-mono text-[11px] text-faint">
+          No account yet? Create one on the server with:
+          <br />
+          <code>go run ./cmd/adminctl create-user -email you@example.com</code>
+        </p>
+      ) : null}
     </div>
   );
 }

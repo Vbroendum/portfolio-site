@@ -27,7 +27,7 @@ export default async function ProjectsPage() {
 
       {projects.items.length === 0 ? (
         <div className="mt-10">
-          <EmptyState hint="Add one in the CMS at /admin/projects.">
+          <EmptyState authoringHint="Add one in the CMS at /admin/projects.">
             No projects published yet.
           </EmptyState>
         </div>

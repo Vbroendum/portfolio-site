@@ -94,16 +94,27 @@ export function ExternalLink({
 
 export function EmptyState({
   children,
-  hint,
+  authoringHint,
 }: {
   children: ReactNode;
-  hint?: string;
+  /**
+   * A note to the site's owner about how to fill this section, shown only
+   * outside production.
+   *
+   * A visitor should never be told that a CMS exists, let alone where it
+   * lives: it is noise to them, and it advertises the admin URL. In
+   * development it is a useful reminder of which screen fills which page.
+   */
+  authoringHint?: string;
 }) {
+  const showHint =
+    authoringHint !== undefined && process.env.NODE_ENV !== "production";
+
   return (
     <div className="rounded-md border border-dashed border-line px-5 py-10 text-center">
       <p className="text-muted">{children}</p>
-      {hint ? (
-        <p className="mt-1 font-mono text-[13px] text-faint">{hint}</p>
+      {showHint ? (
+        <p className="mt-1 font-mono text-[13px] text-faint">{authoringHint}</p>
       ) : null}
     </div>
   );
