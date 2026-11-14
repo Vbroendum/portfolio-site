@@ -238,7 +238,19 @@ append-only and forward-only; see [database.md](database.md#migrations).
 | Build red | Usually a Dockerfile or dependency change; the log names the layer |
 | `services did not converge` | `docker service ps portfolio-site_api --no-trunc` on the server |
 | Smoke test red, services fine | Traefik routing or DNS; check the labels and `docker service logs traefik_traefik` |
-| 525 from Cloudflare | Cloudflare reached the origin but TLS failed; check the certresolver and SSL mode |
+| 525 from Cloudflare | Cloudflare reached an origin and TLS failed. Usually a stale A/AAAA record pointing somewhere that is not this server. |
+| 502 from Cloudflare | The tunnel is routing but cloudflared cannot reach Traefik. Usually a missing Origin Server Name on the route - see [deployment.md](deployment.md#routing-a-new-hostname). |
+
+To tell origin problems from edge problems, test from the server, which skips
+Cloudflare entirely:
+
+```bash
+curl -sk -o /dev/null -w '%{http_code}
+'   --resolve vbroendum.com:443:127.0.0.1 https://vbroendum.com/
+```
+
+A 200 here with a failure from outside means the stack is fine and the problem
+is DNS or the tunnel.
 
 The stack is still serving the previous version in most of these cases, because
 of `start-first` and the automatic rollback. Fix forward on a branch.
