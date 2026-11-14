@@ -85,9 +85,11 @@ Set these once, in GitHub under **Settings -> Secrets and variables -> Actions**
 
 | Name | Value |
 | --- | --- |
-| `DEPLOY_HOST` | The server's hostname or IP |
+| `DEPLOY_HOST` | `debian.taila7cdc0.ts.net` - the server's tailnet name |
 | `DEPLOY_USER` | SSH user, in the `docker` group |
 | `DEPLOY_SSH_KEY` | Private key whose public half is in the server's `authorized_keys` |
+| `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client id (see below) |
+| `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
 
 **Variables** (plain, visible in logs):
 
@@ -100,6 +102,33 @@ Set these once, in GitHub under **Settings -> Secrets and variables -> Actions**
 
 `PUBLIC_*` are variables rather than secrets because they are compiled into the
 browser bundle - they are public by definition.
+
+### Reaching the server
+
+The server is not on the public internet - no port is forwarded to it, and that
+is worth keeping. Instead the deploy job joins your tailnet for the length of
+the job and leaves when it finishes, so SSH is only ever reachable from inside
+the tailnet.
+
+Set it up once, in the Tailscale admin console:
+
+1. **Access controls** - allow a CI tag to exist and to be assigned by you:
+
+   ```json
+   "tagOwners": {
+     "tag:ci": ["autogroup:admin"]
+   }
+   ```
+
+2. **Settings -> OAuth clients -> Generate** with the `auth_keys` write scope
+   and the tag `tag:ci`.
+
+3. Put the two halves into the `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`
+   secrets.
+
+The runner shows up in your tailnet as a short-lived `tag:ci` node during a
+deploy and disappears afterwards. If your ACLs restrict traffic, allow
+`tag:ci` to reach the server on port 22.
 
 ### A deploy key worth having
 
