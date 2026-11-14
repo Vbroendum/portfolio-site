@@ -101,9 +101,9 @@ cat <<EOF
 
   Then push to main. The first deploy pulls the images and starts the stack.
 
-  After the first deploy, create your admin account:
-      docker exec -it \$(docker ps -q -f name=portfolio-site_api) \\
-        adminctl create-user -email you@example.com -name "Your Name"
+  AFTER the first deploy has gone green (there is no container before then),
+  copy scripts/adminctl.sh into ${STACK_DIR} and run:
+      cd ${STACK_DIR} && ./adminctl.sh create-user -email you@example.com
 EOF
 
 say "done"
