@@ -19,7 +19,7 @@ export default async function AboutPage() {
         {about.body_markdown ? (
           <Markdown>{about.body_markdown}</Markdown>
         ) : (
-          <EmptyState hint="Write it in the CMS at /admin/settings.">
+          <EmptyState authoringHint="Write it in the CMS at /admin/settings.">
             Nothing here yet.
           </EmptyState>
         )}

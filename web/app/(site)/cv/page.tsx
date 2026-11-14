@@ -46,7 +46,7 @@ export default async function CVPage() {
 
       {cv.items.length === 0 ? (
         <div className="mt-10">
-          <EmptyState hint="Add entries in the CMS at /admin/cv.">
+          <EmptyState authoringHint="Add entries in the CMS at /admin/cv.">
             No CV entries yet.
           </EmptyState>
         </div>
