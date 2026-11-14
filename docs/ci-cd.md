@@ -113,9 +113,12 @@ the tailnet.
 Set it up once, in the Tailscale admin console at
 <https://console.tailscale.com>.
 
-**1. Define the tag.** Open **Access controls** and add `tag:ci` to
-`tagOwners`. A tag must exist in the policy file before an OAuth client can be
-given it, so this step comes first:
+**1. Define the tag.** There is no point-and-click way to create a tag: it only
+exists once it is in the policy file. In the left sidebar, expand **Access
+controls**, then click **JSON editor**
+(<https://console.tailscale.com/admin/acls>). Add `tag:ci` to `tagOwners`.
+This has to come first - a credential cannot be given a tag that does not yet
+exist:
 
 ```jsonc
 {
