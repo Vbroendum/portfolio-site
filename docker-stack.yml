@@ -101,12 +101,7 @@ services:
     networks:
       - internal
       - traefik-public
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+    # healthcheck comes from the image; see web/Dockerfile
     deploy:
       replicas: 1
       update_config:

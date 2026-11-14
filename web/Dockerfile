@@ -24,8 +24,12 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
+# HOSTNAME matters: the standalone server listens on $HOSTNAME, and Docker sets
+# that to the container id - so without this it binds to the container's own
+# name and nothing on 127.0.0.1 can reach it, including the healthcheck.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
     PORT=3000
 
 RUN addgroup -g 10001 app && adduser -D -u 10001 -G app app
@@ -38,5 +42,10 @@ COPY --from=build --chown=app:app /app/public ./public
 
 USER app
 EXPOSE 3000
+
+# In the image rather than the stack file, so CI can verify it by running the
+# container and waiting for it to report healthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1
 
 CMD ["node", "server.js"]
