@@ -33,6 +33,7 @@ RUN addgroup -g 10001 app && adduser -D -u 10001 -G app app
 # `output: "standalone"` in next.config.ts produces this minimal server bundle.
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
+# public/ must exist in the repo for this to resolve - see public/.gitkeep.
 COPY --from=build --chown=app:app /app/public ./public
 
 USER app
