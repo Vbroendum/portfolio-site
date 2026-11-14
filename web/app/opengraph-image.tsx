@@ -12,6 +12,11 @@ import { FALLBACK_SETTINGS, getSettings } from "@/lib/api/server";
  *
  * Keep it to the site's tokens: ink ground, hairline, one lilac accent.
  */
+// Rendered on demand: prerendering it would bake the build-time fallback
+// ("Portfolio", no headline) into the card, and a scraper that fetched it in
+// that window could cache the wrong image for a long time.
+export const dynamic = "force-dynamic";
+
 export const alt = "Victor Brøndum";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
