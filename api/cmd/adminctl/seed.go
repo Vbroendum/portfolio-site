@@ -1,0 +1,137 @@
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/vbroendum/portfolio/api/internal/models"
+	"github.com/vbroendum/portfolio/api/internal/store"
+)
+
+// cmdSeed inserts a small set of demo content so a fresh database renders a
+// complete-looking site. It is idempotent-ish: slugs collide on a second run,
+// which is reported and skipped rather than treated as a failure.
+func cmdSeed(ctx context.Context) error {
+	st, closeFn, err := connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+
+	posts := []store.PostInput{{
+		Title:   "Hello, world",
+		Summary: "Why I built this site, and what I plan to write about here.",
+		Tags:    []string{"meta"},
+		Status:  models.StatusPublished,
+		BodyMarkdown: `This is the first post on my new site.
+
+I built it with a Go API and a Next.js frontend, mostly because I wanted a
+CMS that does exactly what I need and nothing else.
+
+## What you will find here
+
+- Notes on things I build
+- The occasional debugging story
+- Short posts about tools I like
+`,
+	}, {
+		Title:        "A draft that nobody can see",
+		Summary:      "Drafts are only visible in the admin UI.",
+		Tags:         []string{"meta"},
+		Status:       models.StatusDraft,
+		BodyMarkdown: "Still thinking about this one.",
+	}}
+
+	for _, p := range posts {
+		if _, err := st.CreatePost(ctx, p); err != nil {
+			fmt.Printf("skip post %q: %v\n", p.Title, err)
+			continue
+		}
+		fmt.Printf("seeded post %q\n", p.Title)
+	}
+
+	projects := []store.ProjectInput{{
+		Title:    "todo-tui",
+		Tagline:  "A keyboard-driven todo list that lives in your terminal.",
+		Tech:     []string{"Go", "Bubble Tea"},
+		RepoURL:  "https://github.com/your-handle/todo-tui",
+		DemoType: models.DemoAsciinema,
+		DemoURL:  "https://asciinema.org/a/000000",
+		Featured: true,
+		Status:   models.StatusPublished,
+		BodyMarkdown: `## The problem
+
+Every todo app I tried wanted to be a lifestyle.
+
+## How it works
+
+A single binary, a flat file, and vim keybindings.`,
+	}, {
+		Title:        "weather-cli",
+		Tagline:      "Weather in your terminal, with no API key required.",
+		Tech:         []string{"Go", "CLI"},
+		RepoURL:      "https://github.com/your-handle/weather-cli",
+		DemoType:     models.DemoNone,
+		Status:       models.StatusPublished,
+		BodyMarkdown: "Small, fast, and it caches responses for an hour.",
+	}}
+
+	for _, p := range projects {
+		if _, err := st.CreateProject(ctx, p); err != nil {
+			fmt.Printf("skip project %q: %v\n", p.Title, err)
+			continue
+		}
+		fmt.Printf("seeded project %q\n", p.Title)
+	}
+
+	start := "2023-01-01"
+	cv := []store.CVEntryInput{{
+		Kind:         models.CVExperience,
+		Title:        "Software Developer",
+		Organization: "Example A/S",
+		Location:     "Copenhagen, Denmark",
+		StartDate:    &start,
+		IsCurrent:    true,
+		Highlights:   []string{"Shipped the thing", "Mentored two juniors"},
+		SortOrder:    0,
+	}, {
+		Kind:         models.CVSkill,
+		Title:        "Go, TypeScript, Postgres",
+		Organization: "",
+		SortOrder:    0,
+	}}
+
+	for _, e := range cv {
+		if _, err := st.CreateCVEntry(ctx, e); err != nil {
+			fmt.Printf("skip cv entry %q: %v\n", e.Title, err)
+			continue
+		}
+		fmt.Printf("seeded cv entry %q\n", e.Title)
+	}
+
+	if _, err := st.PutSetting(ctx, "site", map[string]any{
+		"title":       "Your Name",
+		"tagline":     "Developer",
+		"description": "I build small, sharp tools.",
+		"email":       "you@example.com",
+		"location":    "Denmark",
+	}); err != nil {
+		return err
+	}
+	if _, err := st.PutSetting(ctx, "about", map[string]any{
+		"heading":       "About me",
+		"body_markdown": "I am a developer who likes terminals, Postgres and small binaries.",
+	}); err != nil {
+		return err
+	}
+	if _, err := st.PutSetting(ctx, "socials", map[string]any{
+		"links": []map[string]string{
+			{"label": "GitHub", "url": "https://github.com/your-handle"},
+			{"label": "LinkedIn", "url": "https://linkedin.com/in/your-handle"},
+		},
+	}); err != nil {
+		return err
+	}
+	fmt.Println("seeded settings")
+	return nil
+}

@@ -1,0 +1,139 @@
+# Production stack for Docker Swarm, fronted by the existing Traefik.
+#
+# This is NOT docker-compose.yml. That file builds images locally for
+# development; this one pulls prebuilt images from GHCR and adds the Traefik
+# routing labels. CI deploys it with:
+#
+#   set -a; . ./.env; set +a
+#   docker stack deploy -c docker-stack.yml --prune portfolio-site
+#
+# (`docker stack deploy` does not read .env on its own, hence the `set -a`.)
+#
+# Nothing here publishes a host port: Traefik reaches the services over the
+# traefik-public overlay network, and Postgres stays on the internal network
+# where nothing outside the stack can see it.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Without this, a restore from a dump made on another machine can fail on
+      # collation differences.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      replicas: 1
+      placement:
+        # A local volume lives on one node, so the database must stay there.
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 512M
+
+  api:
+    image: ghcr.io/vbroendum/portfolio-site-api:${IMAGE_TAG:-latest}
+    environment:
+      APP_ENV: production
+      API_ADDR: ":8080"
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      SESSION_TTL: ${SESSION_TTL:-168h}
+      # The site and the API are different subdomains of the same parent, so
+      # the session cookie needs that parent to be sent to both.
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      COOKIE_SECURE: "true"
+      CORS_ORIGINS: ${PUBLIC_SITE_URL}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /data/uploads
+      PUBLIC_MEDIA_BASE_URL: ${PUBLIC_API_URL}/media
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
+    volumes:
+      - uploads:/data/uploads
+    networks:
+      - internal
+      - traefik-public
+    deploy:
+      replicas: 1 # the login rate limiter is in-memory; see docs/architecture.md
+      placement:
+        constraints: [node.role == manager] # uploads volume is local
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 5s
+      rollback_config:
+        order: stop-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 256M
+      labels:
+        traefik.enable: "true"
+        traefik.docker.network: traefik-public
+        traefik.http.routers.portfolio-site-api.rule: Host(`${API_HOST}`)
+        traefik.http.routers.portfolio-site-api.entrypoints: websecure
+        traefik.http.routers.portfolio-site-api.tls.certresolver: cloudflare
+        traefik.http.services.portfolio-site-api.loadbalancer.server.port: "8080"
+
+  web:
+    image: ghcr.io/vbroendum/portfolio-site-web:${IMAGE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      # Server-side rendering talks to the API over the overlay network; the
+      # browser uses the public URL, which is already baked into the bundle.
+      API_INTERNAL_URL: http://api:8080
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+      NEXT_PUBLIC_SITE_URL: ${PUBLIC_SITE_URL}
+    networks:
+      - internal
+      - traefik-public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 5s
+      rollback_config:
+        order: stop-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 512M
+      labels:
+        traefik.enable: "true"
+        traefik.docker.network: traefik-public
+        traefik.http.routers.portfolio-site-web.rule: Host(`${SITE_HOST}`) || Host(`www.${SITE_HOST}`)
+        traefik.http.routers.portfolio-site-web.entrypoints: websecure
+        traefik.http.routers.portfolio-site-web.tls.certresolver: cloudflare
+        traefik.http.services.portfolio-site-web.loadbalancer.server.port: "3000"
+
+networks:
+  internal:
+    driver: overlay
+  traefik-public:
+    external: true
+
+volumes:
+  pgdata:
+  uploads:

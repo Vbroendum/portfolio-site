@@ -1,0 +1,15 @@
+# Normalise to LF in the repository. Without this, files committed from Windows
+# arrive on the Linux server with CRLF, which breaks shell scripts outright and
+# confuses Docker builds.
+* text=auto eol=lf
+
+*.sh      text eol=lf
+Dockerfile text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.pdf binary

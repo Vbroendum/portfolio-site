@@ -1,0 +1,176 @@
+# Ship main to the server, but only when the checks pass.
+#
+# Flow:
+#   push to main -> checks (the same workflow PRs run)
+#                -> build both images, push to GHCR tagged with the commit sha
+#                -> ssh to the server, deploy the stack, verify it came up
+#
+# A failed check stops everything before an image is built. A deploy that comes
+# up unhealthy is rolled back by Swarm itself (failure_action: rollback in
+# docker-stack.yml), and the verify step below fails the run so you find out.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Existing image tag to deploy (leave blank to build HEAD). Use a previous sha to roll back."
+        required: false
+
+concurrency:
+  # Never let two deploys race; let a newer commit supersede a queued one.
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/vbroendum/portfolio-site-api
+  WEB_IMAGE: ghcr.io/vbroendum/portfolio-site-web
+
+jobs:
+  # ---------------------------------------------------------------- 1. gate
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  # ---------------------------------------------------------------- 2. build
+  build:
+    needs: checks
+    if: github.event.inputs.image_tag == ''
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build and push api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.API_IMAGE }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: build and push web
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: true
+          # NEXT_PUBLIC_* is compiled into the browser bundle, so the real
+          # production URLs have to be known here, at build time.
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.PUBLIC_API_URL }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.PUBLIC_SITE_URL }}
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.WEB_IMAGE }}:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  # --------------------------------------------------------------- 3. deploy
+  deploy:
+    needs: [checks, build]
+    # Runs after a successful build, or straight away when re-deploying an
+    # existing tag through workflow_dispatch.
+    if: always() && needs.checks.result == 'success' && (needs.build.result == 'success' || github.event.inputs.image_tag != '')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: resolve image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="${{ needs.build.outputs.tag }}"
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Deploying tag: $TAG"
+
+      - name: set up ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ vars.DEPLOY_SSH_PORT || 22 }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: copy stack file
+        run: |
+          scp -P "${{ vars.DEPLOY_SSH_PORT || 22 }}" docker-stack.yml \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ vars.DEPLOY_PATH || '~/stacks/portfolio-site' }}/docker-stack.yml"
+
+      - name: deploy stack
+        run: |
+          ssh -p "${{ vars.DEPLOY_SSH_PORT || 22 }}" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "IMAGE_TAG='${{ steps.tag.outputs.value }}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "${DEPLOY_PATH:-$HOME/stacks/portfolio-site}"
+
+          # Secrets live on the server, never in CI. `docker stack deploy` does
+          # not read .env by itself, so export it first.
+          set -a
+          . ./.env
+          set +a
+          export IMAGE_TAG
+
+          echo "deploying portfolio-site at tag ${IMAGE_TAG}"
+          docker stack deploy -c docker-stack.yml --prune --with-registry-auth portfolio-site
+          REMOTE
+
+      - name: verify rollout
+        run: |
+          ssh -p "${{ vars.DEPLOY_SSH_PORT || 22 }}" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          # Wait for every service to finish converging. Swarm rolls back on its
+          # own if the new task will not start; this turns that into a red run.
+          for i in $(seq 1 60); do
+            pending=$(docker stack services portfolio-site --format '{{.Name}} {{.Replicas}}' \
+                      | awk '{split($2,r,"/"); if (r[1] != r[2]) print $1}')
+            [ -z "$pending" ] && break
+            echo "waiting for: $pending"
+            sleep 5
+          done
+
+          if [ -n "${pending:-}" ]; then
+            echo "::error::services did not converge: $pending"
+            docker stack services portfolio-site
+            exit 1
+          fi
+
+          docker stack services portfolio-site
+          REMOTE
+
+      - name: smoke test
+        run: |
+          # Hit the public URLs the way a visitor would, through Cloudflare and
+          # Traefik, so a routing or certificate problem also fails the deploy.
+          for attempt in $(seq 1 10); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${{ vars.PUBLIC_API_URL }}/healthz" || true)
+            site=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${{ vars.PUBLIC_SITE_URL }}/" || true)
+            echo "attempt $attempt: api=$api site=$site"
+            [ "$api" = "200" ] && [ "$site" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::smoke test failed - api=$api site=$site"
+          exit 1

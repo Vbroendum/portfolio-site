@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# builds
+.next/
+out/
+api/bin/
+dist/
+
+# local data
+data/
+.env
+.env.local
+*.log
+
+# editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# next
+next-env.d.ts
+.vercel
+*.tsbuildinfo

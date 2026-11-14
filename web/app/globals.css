@@ -1,0 +1,297 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Design tokens
+   ---------------------------------------------------------------------------
+   The site is dark-only by design, so there is no light-mode block and no theme
+   switcher. Every colour below is defined once here and referenced through
+   Tailwind utilities (bg-surface, text-muted, border-line, ...).
+
+   The palette is a cool ink base with one accent - a desaturated lilac - used
+   only for interactive and "you are here" states. Nothing decorative uses it.
+--------------------------------------------------------------------------- */
+
+@theme {
+  /* Surfaces, from deepest to most raised. */
+  --color-ink: #0e1013;
+  --color-surface: #15181c;
+  --color-raised: #1b1f24;
+  --color-line: #262b31;
+  --color-line-strong: #39404a;
+
+  /* Text. Warm off-white so the dark base does not read as cold. */
+  --color-fg: #e9e6e0;
+  --color-muted: #9aa1aa;
+  --color-faint: #6b727c;
+
+  /* The single accent. */
+  --color-accent: #b3a4ff;
+  --color-accent-dim: #6f62b8;
+  --color-accent-wash: #1d1a33;
+
+  /* Status, used only in the CMS. */
+  --color-ok: #7bd4a2;
+  --color-warn: #e8c37a;
+  --color-danger: #f08a7c;
+
+  /* Type. Human words are set in a serif, machine words in mono - the split
+     is the whole typographic idea, so keep it consistent. */
+  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Reading measure for long-form prose. */
+  --measure: 68ch;
+}
+
+/* --------------------------------------------------------------------------- */
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    color-scheme: dark;
+    scrollbar-color: var(--color-line-strong) var(--color-ink);
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-fg);
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+  }
+
+  /* Links inside prose get the understated underline treatment; navigation and
+     buttons opt out via their own classes. */
+  a {
+    color: inherit;
+    text-decoration-color: var(--color-line-strong);
+    text-underline-offset: 0.22em;
+  }
+
+  ::selection {
+    background: var(--color-accent-dim);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Prose: markdown rendered by components/markdown.tsx
+--------------------------------------------------------------------------- */
+
+.prose {
+  max-width: var(--measure);
+}
+
+.prose > * + * {
+  margin-top: 1.1em;
+}
+
+.prose h2 {
+  margin-top: 2.2em;
+  margin-bottom: 0.1em;
+  font-size: 1.5rem;
+}
+
+.prose h3 {
+  margin-top: 1.8em;
+  margin-bottom: 0.1em;
+  font-size: 1.2rem;
+}
+
+.prose p {
+  color: var(--color-fg);
+}
+
+.prose a {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent-dim);
+}
+
+.prose a:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.3em;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li::marker {
+  color: var(--color-faint);
+}
+
+.prose li + li {
+  margin-top: 0.35em;
+}
+
+.prose blockquote {
+  border-left: 2px solid var(--color-accent-dim);
+  padding-left: 1em;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--color-raised);
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+.prose pre {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  line-height: 1.6;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.prose img {
+  border-radius: 6px;
+  border: 1px solid var(--color-line);
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  margin: 2.5em 0;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--color-line);
+  padding: 0.5em 0.7em;
+  text-align: left;
+}
+
+.prose th {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Syntax highlighting (highlight.js class names), tuned to the palette.
+--------------------------------------------------------------------------- */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-faint);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: var(--color-accent);
+}
+
+.hljs-string,
+.hljs-doctag,
+.hljs-regexp {
+  color: #9bd1a6;
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-attr {
+  color: #e2bf86;
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-name {
+  color: #8fc8e8;
+}
+
+.hljs-meta,
+.hljs-built_in {
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Motion: one orchestrated entrance on the home hero, nothing else.
+--------------------------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

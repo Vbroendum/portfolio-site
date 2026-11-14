@@ -1,0 +1,95 @@
+# The quality gate. Runs on every pull request, and is called by deploy.yml
+# before anything is built or shipped, so main can only deploy when green.
+name: checks
+
+on:
+  pull_request:
+  workflow_call: # deploy.yml calls this
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: api (go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: go build
+        run: go build ./...
+
+  web:
+    name: web (next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: lint
+        run: npm run lint
+
+      - name: build
+        run: npm run build
+        env:
+          # The build only needs these to be set, not correct: it runs without
+          # an API and falls back to empty content. The real values are baked
+          # in by the image build in deploy.yml.
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+  stack:
+    name: stack file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: docker-stack.yml parses
+        run: |
+          # Catch YAML and interpolation mistakes here rather than on the
+          # server mid-deploy.
+          set -a
+          . ./.env.example
+          IMAGE_TAG=ci
+          SITE_HOST=example.com
+          API_HOST=api.example.com
+          set +a
+          docker compose -f docker-stack.yml config >/dev/null
+          echo "docker-stack.yml is valid"

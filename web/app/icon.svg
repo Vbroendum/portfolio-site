@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="VB">
+  <!-- Favicon. Same tokens as the site: ink ground, hairline, lilac accent.
+       Letters are drawn as paths so the mark is identical everywhere and stays
+       legible at 16px, where a system font would not be. -->
+  <rect width="64" height="64" rx="12" fill="#0e1013" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="11.25" fill="none"
+        stroke="#262b31" stroke-width="1.5" />
+  <g fill="#b3a4ff">
+    <!-- v -->
+    <path d="M12 22h7.5l5 16.5 5-16.5H37L28 46h-7z" />
+    <!-- b -->
+    <path d="M40 14h6.5v9.5a9 9 0 0 1 4.5-1.2c5.7 0 9.5 4.8 9.5 11.9S56.7 46 51 46a9 9 0 0 1-4.8-1.4L45.8 46H40zm6.5 15.2v10.2a5.6 5.6 0 0 0 3.2 1c2.9 0 4.6-2.4 4.6-6.2s-1.7-6.2-4.6-6.2a5.6 5.6 0 0 0-3.2 1z" />
+  </g>
+</svg>
