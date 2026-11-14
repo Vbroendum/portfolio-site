@@ -85,9 +85,11 @@ Set these once, in GitHub under **Settings -> Secrets and variables -> Actions**
 
 | Name | Value |
 | --- | --- |
-| `DEPLOY_HOST` | The server's hostname or IP |
+| `DEPLOY_HOST` | `debian.taila7cdc0.ts.net` - the server's tailnet name |
 | `DEPLOY_USER` | SSH user, in the `docker` group |
 | `DEPLOY_SSH_KEY` | Private key whose public half is in the server's `authorized_keys` |
+| `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client id (see below) |
+| `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
 
 **Variables** (plain, visible in logs):
 
@@ -100,6 +102,64 @@ Set these once, in GitHub under **Settings -> Secrets and variables -> Actions**
 
 `PUBLIC_*` are variables rather than secrets because they are compiled into the
 browser bundle - they are public by definition.
+
+### Reaching the server
+
+The server is not on the public internet - no port is forwarded to it, and that
+is worth keeping. Instead the deploy job joins your tailnet for the length of
+the job and leaves when it finishes, so SSH is only ever reachable from inside
+the tailnet.
+
+Set it up once, in the Tailscale admin console at
+<https://console.tailscale.com>.
+
+**1. Define the tag.** There is no point-and-click way to create a tag: it only
+exists once it is in the policy file. In the left sidebar, expand **Access
+controls**, then click **JSON editor**
+(<https://console.tailscale.com/admin/acls>). Add `tag:ci` to `tagOwners`.
+This has to come first - a credential cannot be given a tag that does not yet
+exist:
+
+```jsonc
+{
+  "tagOwners": {
+    "tag:ci": ["autogroup:admin"],
+  },
+}
+```
+
+If `tagOwners` is already there, add the line inside it rather than adding a
+second block. Save, and check the policy still validates.
+
+**2. Check the tag can reach the server.** A tagged node is not a user, so a
+policy written around `autogroup:member` will not cover it. With the default
+allow-all `acls` there is nothing to do. With anything stricter, add:
+
+```jsonc
+{
+  "action": "accept",
+  "src": ["tag:ci"],
+  "dst": ["debian:22"],
+}
+```
+
+**3. Create the credential.** Go to **Settings -> Trust credentials**
+(<https://console.tailscale.com/admin/settings/trust-credentials>), select
+**Credential -> OAuth**, tick the **write** box for the **auth_keys** scope,
+and pick `tag:ci` in the tag selector that appears. Select **Generate
+credential**.
+
+**4. Store both halves.** The secret is shown once and cannot be retrieved
+later:
+
+```bash
+gh secret set TS_OAUTH_CLIENT_ID --body "<client id>"
+gh secret set TS_OAUTH_SECRET --body "<client secret>"
+```
+
+The runner joins the tailnet as a short-lived `tag:ci` node for the length of
+the deploy and disappears afterwards, so it shows up under **Machines** only
+while a deploy is running.
 
 ### A deploy key worth having
 
@@ -116,16 +176,25 @@ cat ~/.ssh/portfolio-deploy
 
 Deploying on green only works if nothing can reach `main` ungreen:
 
+This is already applied. To change it, edit the payload and re-run. Note that
+the `-f` flag form does not encode the nested `required_status_checks` arrays -
+it returns 200 and protects nothing - so pass a JSON body instead:
+
 ```bash
-gh api -X PUT repos/Vbroendum/portfolio-site/branches/main/protection \
-  -H "Accept: application/vnd.github+json" \
-  -f 'required_status_checks[strict]=true' \
-  -f 'required_status_checks[contexts][]=api (go)' \
-  -f 'required_status_checks[contexts][]=web (next.js)' \
-  -f 'required_status_checks[contexts][]=stack file' \
-  -F 'enforce_admins=false' \
-  -F 'required_pull_request_reviews=null' \
-  -F 'restrictions=null'
+cat > protection.json <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["api (go)", "web (next.js)", "stack file"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
+gh api -X PUT repos/Vbroendum/portfolio-site/branches/main/protection   --input protection.json
 ```
 
 Reviews are left off because you are the only author; the status checks are the

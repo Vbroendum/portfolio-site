@@ -66,13 +66,20 @@ Add the secrets and variables listed in [ci-cd.md](ci-cd.md#configuration).
 git push origin main
 ```
 
-The pipeline builds, pushes and deploys. Then create your account:
+The pipeline builds, pushes and deploys.
+
+**Only once that deploy has gone green** does a container exist to talk to.
+Then create your account:
 
 ```bash
+scp scripts/adminctl.sh victor@debian:~/stacks/portfolio-site/
 ssh victor@debian
-docker exec -it $(docker ps -q -f name=portfolio-site_api) \
-  adminctl create-user -email you@example.com -name "Your Name"
+cd ~/stacks/portfolio-site
+./adminctl.sh create-user -email you@example.com -name "Your Name"
 ```
+
+The helper finds the running container, and says what is actually wrong if the
+stack is not up instead of failing with a confusing "No such container".
 
 Sign in at `https://vbroendum.com/admin/login`.
 
@@ -119,8 +126,7 @@ docker exec -it $(docker ps -q -f name=portfolio-site_postgres) \
   psql -U portfolio -d portfolio
 
 # change your password
-docker exec -it $(docker ps -q -f name=portfolio-site_api) \
-  adminctl set-password -email you@example.com
+~/stacks/portfolio-site/adminctl.sh set-password -email you@example.com
 ```
 
 The API logs structured JSON, one line per request, with a request id. Grep for
