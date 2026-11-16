@@ -176,9 +176,11 @@ jobs:
         run: |
           # Hit the public URLs the way a visitor would, through Cloudflare and
           # Traefik, so a routing or certificate problem also fails the deploy.
+          # "/" redirects to a locale ("/en"), so the site check follows it and
+          # reports the status of the page the visitor actually lands on.
           for attempt in $(seq 1 10); do
             api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${{ vars.PUBLIC_API_URL }}/healthz" || true)
-            site=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${{ vars.PUBLIC_SITE_URL }}/" || true)
+            site=$(curl -sL --max-redirs 3 -o /dev/null -w '%{http_code}' --max-time 10 "${{ vars.PUBLIC_SITE_URL }}/" || true)
             echo "attempt $attempt: api=$api site=$site"
             [ "$api" = "200" ] && [ "$site" = "200" ] && exit 0
             sleep 10

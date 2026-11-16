@@ -34,6 +34,27 @@ Every post and project is **draft** or **published**.
   sitemap. Publishing your first post brings all of it back by itself - there is
   no switch to flip. Unpublishing your last post hides it again.
 
+## Writing in Danish
+
+The site has an English version at `/en` and a Danish one at `/da`. Visitors
+land on whichever their browser prefers, and the header has a switch.
+
+Every editor with text in it (posts, projects, CV entries, settings) has an
+**english | dansk** tab above the text fields. English is the main version:
+write it first. Then switch to **dansk** and translate what you want to.
+
+- **An empty Danish field shows the English text** on `/da`. The grey text in an
+  empty field is exactly what visitors will see there. You can translate a
+  title today and the body next week.
+- A dot on the **dansk** tab means the record has some Danish text.
+- When a Danish page shows an English body, it says so in one line above it, so
+  a visitor is not surprised by the switch.
+- Slugs, tags, dates, images, links and the publish status are shared by both
+  languages. Publishing a post publishes it in both.
+- The name, email and footer links in settings are the same in both languages.
+
+The CMS itself is English only.
+
 ## Posts
 
 **Posts → new post.**

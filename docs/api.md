@@ -33,6 +33,14 @@ are never paginated.
 **Unknown JSON fields are rejected** (`DisallowUnknownFields`), so a typo in a
 request body is an error rather than a silent no-op.
 
+**Languages.** Every public endpoint takes `?lang=en|da`. Leaving it out means
+`en`; any other value is a 400. The response is already localized: Danish
+fields are overlaid on the English ones, with English as the fallback for
+anything untranslated, and there is no `translations` field. Posts and projects
+carry `locale`, the language their body was actually served in. Admin
+endpoints ignore `lang` and return records raw, with `translations`. Details in
+[i18n.md](i18n.md).
+
 ## Public endpoints
 
 No authentication. Only published content is visible.
@@ -47,11 +55,14 @@ No authentication. Only published content is visible.
 | GET | `/api/v1/tech` | - | `{tag, count}` across published projects |
 | GET | `/api/v1/cv` | `kind` | CV entries, grouped and ordered |
 | GET | `/api/v1/settings` | - | `{site, about, socials}` |
-| GET | `/api/v1/feed.xml` | - | RSS 2.0, 50 most recent posts |
+| GET | `/api/v1/feed.xml` | `lang` | RSS 2.0, 50 most recent posts, linking to that locale's pages |
 | GET | `/healthz` | - | `{"status":"ok"}`, or 503 if the database is down |
 | GET | `/media/{key}` | - | An uploaded file, `immutable` cache header |
 
-`q` matches title, summary and body, case-insensitively.
+All of the above except `/tags`, `/tech`, `/healthz` and `/media` also take
+`lang` (see Conventions).
+
+`q` matches title, summary and body, and their translations, case-insensitively.
 
 ## Auth
 
@@ -157,8 +168,13 @@ null, gallery entries disappear.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/api/v1/admin/settings` | All three blobs |
-| PUT | `/api/v1/admin/settings/{key}` | `key` ∈ `site`, `about`, `socials`. Body is the whole blob. |
+| GET | `/api/v1/admin/settings` | All three blobs, raw, `translations` included |
+| PUT | `/api/v1/admin/settings/{key}` | `key` ∈ `site`, `about`, `socials`. Body is the whole blob, `translations` included. |
+
+Posts, projects and CV entries take a `translations` object in their create and
+update bodies, for example `{"da": {"title": "...", "summary": "", "body_markdown": "..."}}`.
+It replaces the stored translations wholesale: leaving it out clears them. Only
+`da` is accepted as a key (422 otherwise); English is the base fields.
 
 Unknown keys are rejected so the table cannot become a junk drawer. To add one,
 extend `allowedSettingKeys` in `handlers_settings.go` and document it in
@@ -171,5 +187,6 @@ Served by the frontend, not the API:
 | Path | Purpose |
 | --- | --- |
 | `POST /api/revalidate` | Purges Next.js cache tags after a CMS save. Authorises by forwarding the session cookie to `/api/v1/auth/me`. Accepts `posts`, `projects`, `cv`, `settings`. |
-| `GET /feed.xml` | Proxies the API's RSS so the feed lives on the site's domain |
+| `GET /en/feed.xml`, `GET /da/feed.xml` | Proxy the API's RSS per locale so the feed lives on the site's domain |
+| `GET /feed.xml` | The English feed, kept for subscriptions made before translations |
 | `GET /sitemap.xml`, `GET /robots.txt` | Generated from the API; `/admin` is disallowed |

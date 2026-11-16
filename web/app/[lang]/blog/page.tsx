@@ -5,18 +5,31 @@ import { notFound } from "next/navigation";
 import { ChipLink, EmptyState, FormattedDate } from "@/components/ui";
 import { emptyList, getPosts, getTags } from "@/lib/api/server";
 import type { Post, TagCount } from "@/lib/api/types";
+import { localePath } from "@/lib/i18n/config";
+import { format, getDictionary } from "@/lib/i18n/dictionaries";
+import { alternatesFor, localeFromParams } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Writing",
-  description: "Notes on things I build.",
+type Props = {
+  params: Promise<{ lang: string }>;
+  searchParams: Promise<{ tag?: string }>;
 };
 
-type Props = { searchParams: Promise<{ tag?: string }> };
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
+  return {
+    title: dict.blog.title,
+    description: dict.blog.description,
+    alternates: await alternatesFor(locale, "/blog"),
+  };
+}
 
-export default async function BlogPage({ searchParams }: Props) {
+export default async function BlogPage({ params, searchParams }: Props) {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
   const { tag } = await searchParams;
   const [posts, tags] = await Promise.all([
-    getPosts({ tag, limit: 50 }).catch(emptyList<Post>),
+    getPosts({ locale, tag, limit: 50 }).catch(emptyList<Post>),
     getTags().catch(() => ({ items: [] as TagCount[] })),
   ]);
 
@@ -26,19 +39,24 @@ export default async function BlogPage({ searchParams }: Props) {
   // the filter chips keep working.
   if (!tag && posts.total === 0) notFound();
 
+  const blogPath = localePath(locale, "/blog");
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
-      <h1 className="text-3xl">Writing</h1>
+      <h1 className="text-3xl">{dict.blog.title}</h1>
 
       {tags.items.length > 0 ? (
-        <nav aria-label="Filter by tag" className="mt-5 flex flex-wrap gap-1.5">
-          <ChipLink href="/blog" active={!tag}>
-            all
+        <nav
+          aria-label={dict.blog.filterLabel}
+          className="mt-5 flex flex-wrap gap-1.5"
+        >
+          <ChipLink href={blogPath} active={!tag}>
+            {dict.blog.allTags}
           </ChipLink>
           {tags.items.map((t) => (
             <ChipLink
               key={t.tag}
-              href={`/blog?tag=${encodeURIComponent(t.tag)}`}
+              href={`${blogPath}?tag=${encodeURIComponent(t.tag)}`}
               active={tag === t.tag}
             >
               {t.tag} {t.count}
@@ -50,7 +68,7 @@ export default async function BlogPage({ searchParams }: Props) {
       {posts.items.length === 0 ? (
         <div className="mt-10">
           <EmptyState authoringHint="Write one in the CMS at /admin/posts.">
-            {`Nothing tagged "${tag}" yet.`}
+            {format(dict.blog.noneTagged, { tag: tag ?? "" })}
           </EmptyState>
         </div>
       ) : (
@@ -58,14 +76,14 @@ export default async function BlogPage({ searchParams }: Props) {
           {posts.items.map((post) => (
             <li key={post.id}>
               <Link
-                href={`/blog/${post.slug}`}
+                href={localePath(locale, `/blog/${post.slug}`)}
                 className="group block py-6 no-underline"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
                   <h2 className="text-xl transition-colors group-hover:text-accent">
                     {post.title}
                   </h2>
-                  <FormattedDate value={post.published_at} />
+                  <FormattedDate value={post.published_at} locale={locale} />
                 </div>
                 <p className="mt-1 max-w-[62ch] text-muted">{post.summary}</p>
               </Link>

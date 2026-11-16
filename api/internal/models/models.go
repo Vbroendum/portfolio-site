@@ -55,6 +55,52 @@ func (k CVKind) Valid() bool {
 	return false
 }
 
+// Locale is a language the public site is served in.
+//
+// The default locale lives in each table's ordinary columns. Every other
+// locale is stored in that row's `translations` column and overlaid onto the
+// default when a public endpoint is asked for it (see store/i18n.go).
+type Locale string
+
+const (
+	LocaleEN Locale = "en"
+	LocaleDA Locale = "da"
+)
+
+// DefaultLocale is what an unprefixed request, or a request without ?lang=,
+// is served in. Its text is in the base columns, never in `translations`.
+const DefaultLocale = LocaleEN
+
+// Valid reports whether the site is served in this locale at all.
+func (l Locale) Valid() bool { return l == LocaleEN || l == LocaleDA }
+
+// Translated reports whether this locale's text lives in `translations`.
+func (l Locale) Translated() bool { return l.Valid() && l != DefaultLocale }
+
+// PostTranslation holds the translatable fields of a post. An empty field
+// falls back to the default locale's text.
+type PostTranslation struct {
+	Title        string `json:"title"`
+	Summary      string `json:"summary"`
+	BodyMarkdown string `json:"body_markdown"`
+}
+
+type ProjectTranslation struct {
+	Title        string `json:"title"`
+	Tagline      string `json:"tagline"`
+	BodyMarkdown string `json:"body_markdown"`
+}
+
+// CVEntryTranslation: an empty Highlights list falls back as a whole, not
+// bullet by bullet.
+type CVEntryTranslation struct {
+	Title               string   `json:"title"`
+	Organization        string   `json:"organization"`
+	Location            string   `json:"location"`
+	DescriptionMarkdown string   `json:"description_markdown"`
+	Highlights          []string `json:"highlights"`
+}
+
 type User struct {
 	ID        uuid.UUID `json:"id"`
 	Email     string    `json:"email"`
@@ -89,6 +135,13 @@ type Post struct {
 	PublishedAt    *time.Time `json:"published_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// Translations is only present on admin reads. Public reads are already
+	// localized and leave it out.
+	Translations map[Locale]PostTranslation `json:"translations,omitempty"`
+	// Locale is the language the body was actually served in, set only on
+	// public reads. It differs from the requested one when the body has not
+	// been translated yet and fell back to the default.
+	Locale Locale `json:"locale,omitempty"`
 }
 
 type Project struct {
@@ -110,6 +163,9 @@ type Project struct {
 	SortOrder    int        `json:"sort_order"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+	// Same contract as Post.Translations and Post.Locale.
+	Translations map[Locale]ProjectTranslation `json:"translations,omitempty"`
+	Locale       Locale                        `json:"locale,omitempty"`
 }
 
 type CVEntry struct {
@@ -126,6 +182,8 @@ type CVEntry struct {
 	SortOrder           int       `json:"sort_order"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
+	// Only present on admin reads; public reads are already localized.
+	Translations map[Locale]CVEntryTranslation `json:"translations,omitempty"`
 }
 
 // Setting is a free-form JSON blob keyed by name ("site", "about", "socials").

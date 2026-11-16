@@ -34,6 +34,23 @@ CMS that does exactly what I need and nothing else.
 - The occasional debugging story
 - Short posts about tools I like
 `,
+		Translations: map[models.Locale]models.PostTranslation{
+			models.LocaleDA: {
+				Title:   "Hej, verden",
+				Summary: "Hvorfor jeg byggede siden, og hvad jeg vil skrive om her.",
+				BodyMarkdown: `Dette er det første indlæg på min nye side.
+
+Jeg byggede den med et Go-API og en Next.js-frontend, mest fordi jeg ville
+have et CMS, der gør præcis det, jeg har brug for, og intet andet.
+
+## Hvad du finder her
+
+- Noter om ting, jeg bygger
+- En fejlfindingshistorie en gang imellem
+- Korte indlæg om værktøjer, jeg kan lide
+`,
+			},
+		},
 	}, {
 		Title:        "A draft that nobody can see",
 		Summary:      "Drafts are only visible in the admin UI.",
@@ -66,7 +83,21 @@ Every todo app I tried wanted to be a lifestyle.
 ## How it works
 
 A single binary, a flat file, and vim keybindings.`,
+		Translations: map[models.Locale]models.ProjectTranslation{
+			models.LocaleDA: {
+				Tagline: "En tastaturstyret todo-liste, der bor i din terminal.",
+				BodyMarkdown: `## Problemet
+
+Hver todo-app, jeg prøvede, ville være en livsstil.
+
+## Sådan virker den
+
+Én binær fil, en flad fil og vim-genveje.`,
+			},
+		},
 	}, {
+		// Deliberately untranslated, so the seeded site shows the English
+		// fallback on /da.
 		Title:        "weather-cli",
 		Tagline:      "Weather in your terminal, with no API key required.",
 		Tech:         []string{"Go", "CLI"},
@@ -94,6 +125,13 @@ A single binary, a flat file, and vim keybindings.`,
 		IsCurrent:    true,
 		Highlights:   []string{"Shipped the thing", "Mentored two juniors"},
 		SortOrder:    0,
+		Translations: map[models.Locale]models.CVEntryTranslation{
+			models.LocaleDA: {
+				Title:      "Softwareudvikler",
+				Location:   "København, Danmark",
+				Highlights: []string{"Fik tingen i produktion", "Var mentor for to juniorer"},
+			},
+		},
 	}, {
 		Kind:         models.CVSkill,
 		Title:        "Go, TypeScript, Postgres",
@@ -115,12 +153,25 @@ A single binary, a flat file, and vim keybindings.`,
 		"description": "I build small, sharp tools.",
 		"email":       "you@example.com",
 		"location":    "Denmark",
+		"translations": map[string]any{
+			"da": map[string]any{
+				"tagline":     "Udvikler",
+				"description": "Jeg bygger små, skarpe værktøjer.",
+				"location":    "Danmark",
+			},
+		},
 	}); err != nil {
 		return err
 	}
 	if _, err := st.PutSetting(ctx, "about", map[string]any{
 		"heading":       "About me",
 		"body_markdown": "I am a developer who likes terminals, Postgres and small binaries.",
+		"translations": map[string]any{
+			"da": map[string]any{
+				"heading":       "Om mig",
+				"body_markdown": "Jeg er udvikler og holder af terminaler, Postgres og små binære filer.",
+			},
+		},
 	}); err != nil {
 		return err
 	}

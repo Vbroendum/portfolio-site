@@ -8,10 +8,20 @@ import {
   StatusLine,
   TextInput,
 } from "@/components/admin/fields";
+import { LocaleTabs } from "@/components/admin/locale-tabs";
 import { MarkdownEditor } from "@/components/admin/markdown-editor";
 import { AdminHeader } from "@/components/admin/shell";
 import { getSettings, putSetting, revalidate } from "@/lib/api/admin";
-import type { Settings, SocialLink } from "@/lib/api/types";
+import type {
+  AboutSettingsText,
+  Locale,
+  SiteSettingsText,
+  Settings,
+  SocialLink,
+  TranslatedLocale,
+} from "@/lib/api/types";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { hasTranslation } from "@/lib/i18n/editing";
 
 const EMPTY: Settings = { site: {}, about: {}, socials: {} };
 
@@ -19,6 +29,11 @@ const EMPTY: Settings = { site: {}, about: {}, socials: {} };
  * Site-wide copy: the header name, the home page headline, the about page and
  * the footer links. These are the strings that appear on every page, so they
  * live in settings rather than in content.
+ *
+ * The language tab switches the translatable strings (headline, description,
+ * location, the about page). The name, email and footer links are the same in
+ * every language. Danish strings are stored inside each blob under
+ * `translations.da`, which the public API overlays onto the English ones.
  */
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(EMPTY);
@@ -26,6 +41,59 @@ export default function SettingsPage() {
     kind: "idle" | "saving" | "saved" | "error";
     message?: string;
   }>({ kind: "idle" });
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const isBase = locale === DEFAULT_LOCALE;
+  const tl = locale as TranslatedLocale;
+
+  /** A site string in the active locale; "" when untranslated. */
+  function siteText(key: keyof SiteSettingsText): string {
+    return (
+      (isBase ? settings.site[key] : settings.site.translations?.[tl]?.[key]) ??
+      ""
+    );
+  }
+
+  function setSiteText(key: keyof SiteSettingsText, value: string) {
+    setSettings((s) => ({
+      ...s,
+      site: isBase
+        ? { ...s.site, [key]: value }
+        : {
+            ...s.site,
+            translations: {
+              ...s.site.translations,
+              [tl]: { ...s.site.translations?.[tl], [key]: value },
+            },
+          },
+    }));
+  }
+
+  function aboutText(key: keyof AboutSettingsText): string {
+    return (
+      (isBase
+        ? settings.about[key]
+        : settings.about.translations?.[tl]?.[key]) ?? ""
+    );
+  }
+
+  function setAboutText(key: keyof AboutSettingsText, value: string) {
+    setSettings((s) => ({
+      ...s,
+      about: isBase
+        ? { ...s.about, [key]: value }
+        : {
+            ...s.about,
+            translations: {
+              ...s.about.translations,
+              [tl]: { ...s.about.translations?.[tl], [key]: value },
+            },
+          },
+    }));
+  }
+
+  /** The English text, shown greyed in an empty translated field. */
+  const fallback = (value: string | undefined) => (isBase ? undefined : value);
+  const shared = isBase ? undefined : "Same in every language.";
 
   useEffect(() => {
     getSettings()
@@ -77,12 +145,25 @@ export default function SettingsPage() {
       </AdminHeader>
 
       <div className="max-w-2xl space-y-8">
+        <LocaleTabs
+          value={locale}
+          onChange={setLocale}
+          filled={{
+            da:
+              hasTranslation(settings.site.translations?.da) ||
+              hasTranslation(settings.about.translations?.da),
+          }}
+        />
+
         <section className="space-y-4">
           <h2 className="border-b border-line pb-1 font-mono text-[12px] text-muted">
             site
           </h2>
 
-          <Field label="name" hint="Appears in the header and browser tab.">
+          <Field
+            label="name"
+            hint={shared ?? "Appears in the header and browser tab."}
+          >
             <TextInput
               value={settings.site.title ?? ""}
               onChange={(v) =>
@@ -96,10 +177,10 @@ export default function SettingsPage() {
             hint="The first line on the home page. Say what you build, plainly."
           >
             <TextInput
-              value={settings.site.tagline ?? ""}
-              onChange={(v) =>
-                setSettings((s) => ({ ...s, site: { ...s.site, tagline: v } }))
-              }
+              value={siteText("tagline")}
+              onChange={(v) => setSiteText("tagline", v)}
+              placeholder={fallback(settings.site.tagline)}
+              lang={locale}
             />
           </Field>
 
@@ -108,18 +189,15 @@ export default function SettingsPage() {
             hint="One or two sentences under the headline. Also the default meta description."
           >
             <TextInput
-              value={settings.site.description ?? ""}
-              onChange={(v) =>
-                setSettings((s) => ({
-                  ...s,
-                  site: { ...s.site, description: v },
-                }))
-              }
+              value={siteText("description")}
+              onChange={(v) => setSiteText("description", v)}
+              placeholder={fallback(settings.site.description)}
+              lang={locale}
             />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="email">
+            <Field label="email" hint={shared}>
               <TextInput
                 value={settings.site.email ?? ""}
                 onChange={(v) =>
@@ -129,13 +207,10 @@ export default function SettingsPage() {
             </Field>
             <Field label="location">
               <TextInput
-                value={settings.site.location ?? ""}
-                onChange={(v) =>
-                  setSettings((s) => ({
-                    ...s,
-                    site: { ...s.site, location: v },
-                  }))
-                }
+                value={siteText("location")}
+                onChange={(v) => setSiteText("location", v)}
+                placeholder={fallback(settings.site.location)}
+                lang={locale}
               />
             </Field>
           </div>
@@ -148,10 +223,10 @@ export default function SettingsPage() {
 
           <Field label="heading">
             <TextInput
-              value={settings.about.heading ?? ""}
-              onChange={(v) =>
-                setSettings((s) => ({ ...s, about: { ...s.about, heading: v } }))
-              }
+              value={aboutText("heading")}
+              onChange={(v) => setAboutText("heading", v)}
+              placeholder={fallback(settings.about.heading)}
+              lang={locale}
             />
           </Field>
 
@@ -160,14 +235,12 @@ export default function SettingsPage() {
               body
             </span>
             <MarkdownEditor
-              value={settings.about.body_markdown ?? ""}
-              onChange={(v) =>
-                setSettings((s) => ({
-                  ...s,
-                  about: { ...s.about, body_markdown: v },
-                }))
-              }
+              key={locale}
+              value={aboutText("body_markdown")}
+              onChange={(v) => setAboutText("body_markdown", v)}
+              placeholder={fallback(settings.about.body_markdown) || undefined}
               rows={12}
+              lang={locale}
             />
           </div>
         </section>
@@ -176,6 +249,9 @@ export default function SettingsPage() {
           <h2 className="border-b border-line pb-1 font-mono text-[12px] text-muted">
             footer links
           </h2>
+          {shared ? (
+            <p className="font-mono text-[11px] text-faint">{shared}</p>
+          ) : null}
 
           <ul className="space-y-2">
             {links.map((link, i) => (

@@ -12,7 +12,7 @@ transaction.
 **Migrations are append-only.** Never edit a file that has already run - the
 runner tracks filenames, not content, so an edit is silently ignored on a
 database that already applied it, and then two environments disagree about what
-the schema is. Add `0002_...sql` instead.
+the schema is. Add the next numbered file (`0003_...sql`) instead.
 
 Naming: `NNNN_short_description.sql`, zero-padded to four digits.
 
@@ -30,6 +30,13 @@ recovery path is "restore the backup", and reversible migrations would be a
 machine for creating false confidence.
 
 ## Tables
+
+### Translations
+`posts`, `projects` and `cv_entries` each have `translations JSONB NOT NULL
+DEFAULT '{}'` (since `0002_translations.sql`), keyed by locale:
+`{"da": {"title": "...", ...}}`. The base columns are always English. The
+store overlays a locale onto them on public reads, falling back per field; see
+[i18n.md](i18n.md). Settings blobs keep the same shape inside their own value.
 
 ### `users`
 One row, normally. `password_hash` is argon2id in PHC format. Created by
@@ -78,6 +85,9 @@ site     {title, tagline, description, email, location}
 about    {heading, body_markdown, avatar_media_id}
 socials  {links: [{label, url}]}
 ```
+
+`site` and `about` may also hold `translations: {da: {...}}` with any of their
+string fields; only top-level strings are overlaid on public reads.
 
 Deliberately schemaless: these are page copy, not content records, and giving
 them columns would mean a migration every time a line of text moves.

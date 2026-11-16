@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
+import { INTL_LOCALE, type Locale } from "@/lib/i18n/config";
+
 /** Small shared primitives. Deliberately few: the site is mostly type. */
 
 export function Chip({ children }: { children: ReactNode }) {
@@ -53,9 +55,11 @@ export function SectionHead({
 /** Dates are machine data, so they are set in mono throughout the site. */
 export function FormattedDate({
   value,
+  locale,
   className = "",
 }: {
   value?: string | null;
+  locale: Locale;
   className?: string;
 }) {
   if (!value) return null;
@@ -65,12 +69,24 @@ export function FormattedDate({
       dateTime={date.toISOString()}
       className={`font-mono text-[13px] text-faint ${className}`}
     >
-      {date.toLocaleDateString("en-GB", {
+      {date.toLocaleDateString(INTL_LOCALE[locale], {
         day: "numeric",
         month: "short",
         year: "numeric",
       })}
     </time>
+  );
+}
+
+/**
+ * Shown above a body that fell back to English on a Danish page, so the switch
+ * of language is announced instead of looking like a mistake.
+ */
+export function UntranslatedNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-6 max-w-[var(--measure)] border-l-2 border-line pl-3 font-mono text-[12px] text-faint">
+      {children}
+    </p>
   );
 }
 

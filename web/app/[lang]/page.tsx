@@ -5,22 +5,30 @@ import { ProjectDemo } from "@/components/project-demo";
 import { Chip, FormattedDate, SectionHead } from "@/components/ui";
 import {
   FALLBACK_SETTINGS,
+  emptyList,
   getPosts,
   getProjects,
   getSettings,
 } from "@/lib/api/server";
 import type { Post, Project } from "@/lib/api/types";
+import { localePath } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { localeFromParams } from "@/lib/i18n/server";
+
+type Props = { params: Promise<{ lang: string }> };
 
 /**
  * The home page leads with work that is actually running: the first featured
  * project's demo sits in the hero, under one line of plain text. No stat
  * counters, no "hi, I'm X who does Y and Z" paragraph.
  */
-export default async function HomePage() {
+export default async function HomePage({ params }: Props) {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
   const [settings, projects, posts] = await Promise.all([
-    getSettings().catch(() => FALLBACK_SETTINGS),
-    getProjects().catch(() => ({ items: [] as Project[], total: 0, limit: 0, offset: 0 })),
-    getPosts({ limit: 4 }).catch(() => ({ items: [] as Post[], total: 0, limit: 0, offset: 0 })),
+    getSettings(locale).catch(() => FALLBACK_SETTINGS),
+    getProjects({ locale }).catch(emptyList<Project>),
+    getPosts({ locale, limit: 4 }).catch(emptyList<Post>),
   ]);
 
   const featured = projects.items.find((p) => p.featured) ?? projects.items[0];
@@ -31,7 +39,7 @@ export default async function HomePage() {
       {/* ---- hero ---- */}
       <section className="rise py-14 sm:py-20">
         <h1 className="max-w-[20ch] text-4xl sm:text-5xl">
-          {settings.site?.tagline || "I build things, mostly small and sharp."}
+          {settings.site?.tagline || dict.home.heroFallback}
         </h1>
         {settings.site?.description ? (
           <p className="mt-4 max-w-[58ch] text-muted">
@@ -41,10 +49,13 @@ export default async function HomePage() {
 
         {featured ? (
           <div className="mt-10">
-            <ProjectDemo project={featured} />
+            <ProjectDemo project={featured} labels={dict.demo} />
             <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
               <p className="text-muted">
-                <Link href={`/projects/${featured.slug}`} className="text-fg">
+                <Link
+                  href={localePath(locale, `/projects/${featured.slug}`)}
+                  className="text-fg"
+                >
                   {featured.title}
                 </Link>
                 {featured.tagline ? ` - ${featured.tagline}` : null}
@@ -63,10 +74,13 @@ export default async function HomePage() {
       {rest.length > 0 ? (
         <section className="py-10">
           <SectionHead
-            title="Other work"
+            title={dict.home.otherWork}
             action={
-              <Link href="/projects" className="text-muted hover:text-fg">
-                all projects
+              <Link
+                href={localePath(locale, "/projects")}
+                className="text-muted hover:text-fg"
+              >
+                {dict.home.allProjects}
               </Link>
             }
           />
@@ -74,7 +88,7 @@ export default async function HomePage() {
             {rest.map((project) => (
               <li key={project.id}>
                 <Link
-                  href={`/projects/${project.slug}`}
+                  href={localePath(locale, `/projects/${project.slug}`)}
                   className="group flex flex-col gap-1 py-4 no-underline sm:flex-row sm:items-baseline sm:justify-between sm:gap-8"
                 >
                   <span className="shrink-0 group-hover:text-accent">
@@ -94,10 +108,13 @@ export default async function HomePage() {
       {posts.items.length > 0 ? (
         <section className="py-10">
           <SectionHead
-            title="Recent writing"
+            title={dict.home.recentWriting}
             action={
-              <Link href="/blog" className="text-muted hover:text-fg">
-                all posts
+              <Link
+                href={localePath(locale, "/blog")}
+                className="text-muted hover:text-fg"
+              >
+                {dict.home.allPosts}
               </Link>
             }
           />
@@ -105,11 +122,11 @@ export default async function HomePage() {
             {posts.items.map((post) => (
               <li key={post.id}>
                 <Link
-                  href={`/blog/${post.slug}`}
+                  href={localePath(locale, `/blog/${post.slug}`)}
                   className="group flex flex-col gap-1 py-4 no-underline sm:flex-row sm:items-baseline sm:justify-between sm:gap-8"
                 >
                   <span className="group-hover:text-accent">{post.title}</span>
-                  <FormattedDate value={post.published_at} />
+                  <FormattedDate value={post.published_at} locale={locale} />
                 </Link>
               </li>
             ))}
@@ -121,10 +138,13 @@ export default async function HomePage() {
       {settings.about?.body_markdown ? (
         <section className="py-10">
           <SectionHead
-            title={settings.about.heading || "About"}
+            title={settings.about.heading || dict.home.aboutFallback}
             action={
-              <Link href="/about" className="text-muted hover:text-fg">
-                more
+              <Link
+                href={localePath(locale, "/about")}
+                className="text-muted hover:text-fg"
+              >
+                {dict.home.more}
               </Link>
             }
           />

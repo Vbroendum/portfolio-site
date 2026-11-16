@@ -16,7 +16,11 @@ func (s *Server) handleListPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetPostBySlug(w http.ResponseWriter, r *http.Request) {
-	post, err := s.store.GetPostBySlug(r.Context(), chi.URLParam(r, "slug"), false)
+	loc, ok := publicLocale(w, r)
+	if !ok {
+		return
+	}
+	post, err := s.store.GetPostBySlug(r.Context(), chi.URLParam(r, "slug"), false, loc)
 	if err != nil {
 		writeStoreErr(w, err, "post")
 		return
@@ -103,7 +107,17 @@ func (s *Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 // ---- shared ---------------------------------------------------------------
 
 func (s *Server) listPosts(w http.ResponseWriter, r *http.Request, includeDrafts bool) {
+	// Admin lists are raw so the CMS sees every language; public ones are
+	// localized.
+	var loc models.Locale
+	if !includeDrafts {
+		var ok bool
+		if loc, ok = publicLocale(w, r); !ok {
+			return
+		}
+	}
 	f := store.PostFilter{
+		Locale:        loc,
 		IncludeDrafts: includeDrafts,
 		Tag:           r.URL.Query().Get("tag"),
 		Search:        r.URL.Query().Get("q"),
@@ -129,5 +143,5 @@ func validatePost(w http.ResponseWriter, in store.PostInput) bool {
 		writeErr(w, http.StatusUnprocessableEntity, "validation", "status must be 'draft' or 'published'")
 		return false
 	}
-	return true
+	return validTranslations(w, in.Translations)
 }

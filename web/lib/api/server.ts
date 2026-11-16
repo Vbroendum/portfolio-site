@@ -15,6 +15,7 @@ import "server-only";
 import type {
   CVEntry,
   ListEnvelope,
+  Locale,
   Post,
   Project,
   Settings,
@@ -113,25 +114,31 @@ async function safeMessage(res: Response): Promise<string> {
 // Public reads
 // ---------------------------------------------------------------------------
 
+// Every public read takes a locale and sends it as ?lang=. The API overlays the
+// translation and falls back to English per field, so the pages never see the
+// raw `translations` map. Cache tags stay per content type, not per locale:
+// one CMS save has to purge every language at once.
+
 export function getPosts(params: {
+  locale: Locale;
   tag?: string;
   limit?: number;
   offset?: number;
-} = {}) {
-  const q = new URLSearchParams();
+}) {
+  const q = new URLSearchParams({ lang: params.locale });
   if (params.tag) q.set("tag", params.tag);
   if (params.limit) q.set("limit", String(params.limit));
   if (params.offset) q.set("offset", String(params.offset));
-  const qs = q.toString();
-  return get<ListEnvelope<Post>>(`/api/v1/posts${qs ? `?${qs}` : ""}`, {
+  return get<ListEnvelope<Post>>(`/api/v1/posts?${q}`, {
     tags: [CACHE_TAGS.posts],
   });
 }
 
-export function getPost(slug: string) {
-  return getOrNull<Post>(`/api/v1/posts/${encodeURIComponent(slug)}`, {
-    tags: [CACHE_TAGS.posts, `post:${slug}`],
-  });
+export function getPost(slug: string, locale: Locale) {
+  return getOrNull<Post>(
+    `/api/v1/posts/${encodeURIComponent(slug)}?lang=${locale}`,
+    { tags: [CACHE_TAGS.posts, `post:${slug}`] },
+  );
 }
 
 export function getTags() {
@@ -140,24 +147,30 @@ export function getTags() {
   });
 }
 
-export function getProjects(params: { featured?: boolean; tech?: string } = {}) {
-  const q = new URLSearchParams();
+export function getProjects(params: {
+  locale: Locale;
+  featured?: boolean;
+  tech?: string;
+}) {
+  const q = new URLSearchParams({ lang: params.locale });
   if (params.featured) q.set("featured", "true");
   if (params.tech) q.set("tech", params.tech);
-  const qs = q.toString();
-  return get<ListEnvelope<Project>>(`/api/v1/projects${qs ? `?${qs}` : ""}`, {
+  return get<ListEnvelope<Project>>(`/api/v1/projects?${q}`, {
     tags: [CACHE_TAGS.projects],
   });
 }
 
-export function getProject(slug: string) {
-  return getOrNull<Project>(`/api/v1/projects/${encodeURIComponent(slug)}`, {
-    tags: [CACHE_TAGS.projects, `project:${slug}`],
-  });
+export function getProject(slug: string, locale: Locale) {
+  return getOrNull<Project>(
+    `/api/v1/projects/${encodeURIComponent(slug)}?lang=${locale}`,
+    { tags: [CACHE_TAGS.projects, `project:${slug}`] },
+  );
 }
 
-export function getCV() {
-  return get<{ items: CVEntry[] }>("/api/v1/cv", { tags: [CACHE_TAGS.cv] });
+export function getCV(locale: Locale) {
+  return get<{ items: CVEntry[] }>(`/api/v1/cv?lang=${locale}`, {
+    tags: [CACHE_TAGS.cv],
+  });
 }
 
 /**
@@ -176,6 +189,8 @@ export const emptyList = <T,>(): ListEnvelope<T> => ({
 /** Neutral settings used when the API is unreachable during a render. */
 export const FALLBACK_SETTINGS: Settings = { site: {}, about: {}, socials: {} };
 
-export function getSettings() {
-  return get<Settings>("/api/v1/settings", { tags: [CACHE_TAGS.settings] });
+export function getSettings(locale: Locale) {
+  return get<Settings>(`/api/v1/settings?lang=${locale}`, {
+    tags: [CACHE_TAGS.settings],
+  });
 }

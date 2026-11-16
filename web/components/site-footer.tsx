@@ -1,18 +1,23 @@
 import Link from "next/link";
 
 import type { SocialLink } from "@/lib/api/types";
+import { localePath, type Locale } from "@/lib/i18n/config";
 
 export function SiteFooter({
+  locale,
   email,
   location,
   links,
   showRss,
+  rssLabel,
 }: {
+  locale: Locale;
   email?: string;
   location?: string;
   links: SocialLink[];
   /** An empty feed is worse than no feed, so the link waits for a post. */
   showRss: boolean;
+  rssLabel: string;
 }) {
   return (
     <footer className="mt-24 border-t border-line">
@@ -39,8 +44,8 @@ export function SiteFooter({
             </a>
           ))}
           {showRss ? (
-            <Link href="/feed.xml" className="hover:text-fg">
-              rss
+            <Link href={localePath(locale, "/feed.xml")} className="hover:text-fg">
+              {rssLabel}
             </Link>
           ) : null}
         </div>

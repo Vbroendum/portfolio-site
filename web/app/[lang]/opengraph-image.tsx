@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
 import { FALLBACK_SETTINGS, getSettings } from "@/lib/api/server";
+import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config";
 
 /**
  * The link preview card, used by LinkedIn, Slack, iMessage, Mastodon and the
@@ -21,8 +22,15 @@ export const alt = "Victor Brøndum";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default async function OpengraphImage() {
-  const settings = await getSettings().catch(() => FALLBACK_SETTINGS);
+/** One card per locale, so a Danish link previews with the Danish headline. */
+export default async function OpengraphImage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
+  const locale = isLocale(lang) ? lang : DEFAULT_LOCALE;
+  const settings = await getSettings(locale).catch(() => FALLBACK_SETTINGS);
   const name = settings.site?.title || "Portfolio";
   const headline = settings.site?.tagline || "";
   const location = settings.site?.location || "";

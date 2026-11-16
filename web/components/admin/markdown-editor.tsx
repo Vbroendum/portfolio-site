@@ -15,10 +15,15 @@ export function MarkdownEditor({
   value,
   onChange,
   rows = 22,
+  placeholder = "Write in markdown. Fenced code blocks get syntax highlighting.",
+  lang,
 }: {
   value: string;
   onChange: (value: string) => void;
   rows?: number;
+  placeholder?: string;
+  /** Sets the browser's spellcheck language. */
+  lang?: string;
 }) {
   const [tab, setTab] = useState<"write" | "preview">("write");
 
@@ -49,7 +54,8 @@ export function MarkdownEditor({
           value={value}
           rows={rows}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Write in markdown. Fenced code blocks get syntax highlighting."
+          placeholder={placeholder}
+          lang={lang}
           spellCheck
           className="block w-full resize-y bg-transparent px-3 py-2.5 font-mono text-[13px] leading-relaxed text-fg placeholder:text-faint focus:outline-none"
         />

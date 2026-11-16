@@ -4,25 +4,40 @@ import { Markdown } from "@/components/markdown";
 import { Chip, EmptyState, SectionHead } from "@/components/ui";
 import { FALLBACK_SETTINGS, getCV, getSettings } from "@/lib/api/server";
 import type { CVEntry, CVKind } from "@/lib/api/types";
+import { INTL_LOCALE, type Locale } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { alternatesFor, localeFromParams } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "CV",
-  description: "Experience, education and the tools I reach for.",
-};
+type Props = { params: Promise<{ lang: string }> };
 
-/** Section order on the page. Entries of other kinds are appended at the end. */
-const SECTIONS: { kind: CVKind; label: string }[] = [
-  { kind: "experience", label: "Experience" },
-  { kind: "education", label: "Education" },
-  { kind: "certification", label: "Certifications" },
-  { kind: "skill", label: "Skills" },
-  { kind: "other", label: "Also" },
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
+  return {
+    title: dict.cv.title,
+    description: dict.cv.description,
+    alternates: await alternatesFor(locale, "/cv"),
+  };
+}
+
+/**
+ * Section order on the page; the labels come from the dictionary. Entries of
+ * other kinds are not shown.
+ */
+const SECTIONS: CVKind[] = [
+  "experience",
+  "education",
+  "certification",
+  "skill",
+  "other",
 ];
 
-export default async function CVPage() {
+export default async function CVPage({ params }: Props) {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
   const [cv, settings] = await Promise.all([
-    getCV().catch(() => ({ items: [] as CVEntry[] })),
-    getSettings().catch(() => FALLBACK_SETTINGS),
+    getCV(locale).catch(() => ({ items: [] as CVEntry[] })),
+    getSettings(locale).catch(() => FALLBACK_SETTINGS),
   ]);
 
   const byKind = new Map<CVKind, CVEntry[]>();
@@ -33,7 +48,7 @@ export default async function CVPage() {
   return (
     <div className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
       <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="text-3xl">CV</h1>
+        <h1 className="text-3xl">{dict.cv.title}</h1>
         {settings.site?.email ? (
           <a
             href={`mailto:${settings.site.email}`}
@@ -47,26 +62,26 @@ export default async function CVPage() {
       {cv.items.length === 0 ? (
         <div className="mt-10">
           <EmptyState authoringHint="Add entries in the CMS at /admin/cv.">
-            No CV entries yet.
+            {dict.cv.empty}
           </EmptyState>
         </div>
       ) : null}
 
       <div className="mt-12 space-y-14">
-        {SECTIONS.map(({ kind, label }) => {
+        {SECTIONS.map((kind) => {
           const entries = byKind.get(kind);
           if (!entries || entries.length === 0) return null;
 
           return (
             <section key={kind}>
-              <SectionHead title={label} />
+              <SectionHead title={dict.cv[kind]} />
               {kind === "skill" ? (
                 <SkillGroups entries={entries} />
               ) : (
                 <ul className="space-y-8">
                   {entries.map((entry) => (
                     <li key={entry.id}>
-                      <Entry entry={entry} />
+                      <Entry entry={entry} locale={locale} now={dict.cv.now} />
                     </li>
                   ))}
                 </ul>
@@ -125,11 +140,19 @@ function SkillGroups({ entries }: { entries: CVEntry[] }) {
  * Dates sit in a fixed left column on wide screens so roles line up into a
  * readable timeline; on mobile they stack above the title.
  */
-function Entry({ entry }: { entry: CVEntry }) {
+function Entry({
+  entry,
+  locale,
+  now,
+}: {
+  entry: CVEntry;
+  locale: Locale;
+  now: string;
+}) {
   return (
     <div className="grid gap-1 sm:grid-cols-[10rem_1fr] sm:gap-6">
       <p className="font-mono text-[13px] text-faint sm:pt-1">
-        {formatRange(entry)}
+        {formatRange(entry, locale, now)}
       </p>
 
       <div>
@@ -163,17 +186,17 @@ function Entry({ entry }: { entry: CVEntry }) {
   );
 }
 
-function formatRange(entry: CVEntry): string {
-  const start = formatMonth(entry.start_date);
-  const end = entry.is_current ? "now" : formatMonth(entry.end_date);
+function formatRange(entry: CVEntry, locale: Locale, now: string): string {
+  const start = formatMonth(entry.start_date, locale);
+  const end = entry.is_current ? now : formatMonth(entry.end_date, locale);
   if (!start && !end) return "";
   if (!end) return start;
   return `${start} - ${end}`;
 }
 
-function formatMonth(value?: string | null): string {
+function formatMonth(value: string | null | undefined, locale: Locale): string {
   if (!value) return "";
-  return new Date(value).toLocaleDateString("en-GB", {
+  return new Date(value).toLocaleDateString(INTL_LOCALE[locale], {
     month: "short",
     year: "numeric",
   });

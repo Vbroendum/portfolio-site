@@ -4,6 +4,9 @@ import Image from "next/image";
 import { useState } from "react";
 
 import type { Media, Project } from "@/lib/api/types";
+import { format, type Dictionary } from "@/lib/i18n/dictionaries";
+
+type Labels = Dictionary["demo"];
 
 /**
  * Renders a project's demo according to its `demo_type`. Adding a new kind
@@ -12,14 +15,23 @@ import type { Media, Project } from "@/lib/api/types";
  *
  * The frame is shared by every kind so projects line up visually, with a mono
  * caption bar standing in for a browser/terminal chrome.
+ *
+ * It is a client component, so its strings arrive as plain `labels` from the
+ * page's dictionary rather than being looked up here.
  */
-export function ProjectDemo({ project }: { project: Project }) {
+export function ProjectDemo({
+  project,
+  labels,
+}: {
+  project: Project;
+  labels: Labels;
+}) {
   if (project.demo_type === "none") return null;
 
   return (
     <figure className="overflow-hidden rounded-md border border-line bg-surface">
       <figcaption className="flex items-center justify-between gap-3 border-b border-line px-3 py-2 font-mono text-[12px] text-faint">
-        <span>{captionFor(project)}</span>
+        <span>{captionFor(project, labels)}</span>
         {project.live_url ? (
           <a
             href={project.live_url}
@@ -27,25 +39,27 @@ export function ProjectDemo({ project }: { project: Project }) {
             rel="noreferrer"
             className="no-underline hover:text-accent"
           >
-            open live
+            {labels.openLive}
           </a>
         ) : null}
       </figcaption>
-      <DemoBody project={project} />
+      <DemoBody project={project} labels={labels} />
     </figure>
   );
 }
 
-function captionFor(project: Project): string {
+function captionFor(project: Project, labels: Labels): string {
   switch (project.demo_type) {
     case "iframe":
       return hostOf(project.demo_url);
     case "video":
-      return "screen recording";
+      return labels.screenRecording;
     case "asciinema":
-      return "terminal session";
+      return labels.terminalSession;
     case "gallery":
-      return `${project.gallery.length} screenshot${project.gallery.length === 1 ? "" : "s"}`;
+      return project.gallery.length === 1
+        ? labels.screenshotOne
+        : format(labels.screenshotMany, { n: project.gallery.length });
     default:
       return "";
   }
@@ -59,10 +73,16 @@ function hostOf(url: string): string {
   }
 }
 
-function DemoBody({ project }: { project: Project }) {
+function DemoBody({ project, labels }: { project: Project; labels: Labels }) {
   switch (project.demo_type) {
     case "iframe":
-      return <IframeDemo url={project.demo_url} title={project.title} />;
+      return (
+        <IframeDemo
+          url={project.demo_url}
+          title={format(labels.iframeTitle, { title: project.title })}
+          loadLabel={labels.loadLive}
+        />
+      );
     case "video":
       return (
         <video
@@ -77,9 +97,14 @@ function DemoBody({ project }: { project: Project }) {
         />
       );
     case "asciinema":
-      return <AsciinemaDemo url={project.demo_url} title={project.title} />;
+      return (
+        <AsciinemaDemo
+          url={project.demo_url}
+          title={format(labels.terminalTitle, { title: project.title })}
+        />
+      );
     case "gallery":
-      return <Gallery items={project.gallery} />;
+      return <Gallery items={project.gallery} labels={labels} />;
     default:
       return null;
   }
@@ -89,7 +114,15 @@ function DemoBody({ project }: { project: Project }) {
  * Live sites load on click, not on page load: a project page with four demos
  * should not pull four third-party sites down with it.
  */
-function IframeDemo({ url, title }: { url: string; title: string }) {
+function IframeDemo({
+  url,
+  title,
+  loadLabel,
+}: {
+  url: string;
+  title: string;
+  loadLabel: string;
+}) {
   const [loaded, setLoaded] = useState(false);
 
   if (!loaded) {
@@ -99,7 +132,7 @@ function IframeDemo({ url, title }: { url: string; title: string }) {
         onClick={() => setLoaded(true)}
         className="group flex aspect-video w-full flex-col items-center justify-center gap-2 bg-ink text-muted transition-colors hover:text-fg"
       >
-        <span className="font-mono text-[13px]">load live demo</span>
+        <span className="font-mono text-[13px]">{loadLabel}</span>
         <span className="font-mono text-[12px] text-faint">{hostOf(url)}</span>
       </button>
     );
@@ -108,7 +141,7 @@ function IframeDemo({ url, title }: { url: string; title: string }) {
   return (
     <iframe
       src={url}
-      title={`${title} demo`}
+      title={title}
       className="block aspect-video w-full bg-ink"
       loading="lazy"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -126,19 +159,19 @@ function AsciinemaDemo({ url, title }: { url: string; title: string }) {
   return (
     <iframe
       src={`https://asciinema.org/a/${id}/embed?theme=nord&autoplay=0`}
-      title={`${title} terminal recording`}
+      title={title}
       className="block aspect-video w-full bg-ink"
       loading="lazy"
     />
   );
 }
 
-function Gallery({ items }: { items: Media[] }) {
+function Gallery({ items, labels }: { items: Media[]; labels: Labels }) {
   const [index, setIndex] = useState(0);
   if (items.length === 0) {
     return (
       <p className="p-6 text-center font-mono text-[13px] text-faint">
-        No screenshots added yet.
+        {labels.noScreenshots}
       </p>
     );
   }
@@ -162,7 +195,7 @@ function Gallery({ items }: { items: Media[] }) {
               key={item.id}
               type="button"
               onClick={() => setIndex(i)}
-              aria-label={`Show screenshot ${i + 1}`}
+              aria-label={format(labels.showScreenshot, { n: i + 1 })}
               aria-current={i === index}
               className={`relative h-12 w-20 shrink-0 overflow-hidden rounded border transition-opacity ${
                 i === index

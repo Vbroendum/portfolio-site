@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { JetBrains_Mono, Newsreader } from "next/font/google";
 
 import "./globals.css";
-import { getPosts, getSettings } from "@/lib/api/server";
+import { requestLocale } from "@/lib/i18n/server";
 
 /**
  * Two families, split by role: a serif for words a human wrote, a mono for
@@ -24,42 +24,29 @@ const jetbrains = JetBrains_Mono({
 });
 
 /**
- * Titles and descriptions come from the CMS "site" settings blob, so the owner
- * can change them without a deploy. If the API is down during build we fall
- * back to neutral defaults rather than failing the render.
+ * Only what holds for every route, the CMS included. The site's titles,
+ * descriptions and feed links are per locale, so they live in
+ * app/[lang]/layout.tsx.
  */
-export async function generateMetadata(): Promise<Metadata> {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  try {
-    const settings = await getSettings();
-    const title = settings.site?.title || "Portfolio";
-    const description = settings.site?.description || "";
-    // Only advertise the feed once it has something in it; /feed.xml 404s
-    // while the blog is empty.
-    const hasPosts = await getPosts({ limit: 1 })
-      .then((r) => r.total > 0)
-      .catch(() => false);
-    return {
-      metadataBase: new URL(siteUrl),
-      title: { default: title, template: `%s · ${title}` },
-      description,
-      openGraph: { title, description, type: "website", url: siteUrl },
-      ...(hasPosts
-        ? { alternates: { types: { "application/rss+xml": "/feed.xml" } } }
-        : {}),
-    };
-  } catch {
-    return { metadataBase: new URL(siteUrl), title: "Portfolio" };
-  }
-}
+export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
+  title: "Portfolio",
+};
 
-export default function RootLayout({
+/**
+ * The root layout sits above [lang], so it learns the locale from the header
+ * proxy.ts sets. Routes outside the public site (the CMS) get the default.
+ */
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const lang = await requestLocale();
   return (
-    <html lang="en" className={`${newsreader.variable} ${jetbrains.variable}`}>
+    <html lang={lang} className={`${newsreader.variable} ${jetbrains.variable}`}>
       <body className="min-h-dvh bg-ink text-fg">{children}</body>
     </html>
   );

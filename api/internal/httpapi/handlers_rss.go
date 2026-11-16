@@ -34,13 +34,19 @@ type rssItem struct {
 	Description string `xml:"description"`
 }
 
+// handleRSS serves one feed per locale (?lang=da), linking to that locale's
+// pages. Untranslated posts still appear, in the default language.
 func (s *Server) handleRSS(w http.ResponseWriter, r *http.Request) {
-	posts, _, err := s.store.ListPosts(r.Context(), store.PostFilter{Limit: 50})
+	loc, ok := publicLocale(w, r)
+	if !ok {
+		return
+	}
+	posts, _, err := s.store.ListPosts(r.Context(), store.PostFilter{Limit: 50, Locale: loc})
 	if err != nil {
 		writeStoreErr(w, err, "posts")
 		return
 	}
-	settings, err := s.store.GetAllSettings(r.Context())
+	settings, err := s.store.GetAllSettings(r.Context(), loc)
 	if err != nil {
 		writeStoreErr(w, err, "settings")
 		return
@@ -53,14 +59,15 @@ func (s *Server) handleRSS(w http.ResponseWriter, r *http.Request) {
 		title = "Portfolio"
 	}
 	base := s.cfg.PublicSiteURL
+	pages := base + "/" + string(loc)
 
 	feed := rssFeed{
 		Version: "2.0",
 		Channel: rssChannel{
 			Title:       title,
-			Link:        base,
+			Link:        pages,
 			Description: desc,
-			Language:    "en",
+			Language:    string(loc),
 			Updated:     time.Now().UTC().Format(time.RFC1123Z),
 			Items:       make([]rssItem, 0, len(posts)),
 		},
@@ -70,7 +77,7 @@ func (s *Server) handleRSS(w http.ResponseWriter, r *http.Request) {
 		if p.PublishedAt != nil {
 			pub = *p.PublishedAt
 		}
-		link := base + "/blog/" + p.Slug
+		link := pages + "/blog/" + p.Slug
 		feed.Channel.Items = append(feed.Channel.Items, rssItem{
 			Title:       p.Title,
 			Link:        link,
