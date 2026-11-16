@@ -31,6 +31,10 @@ docker compose exec api adminctl seed
   never writes HTTP; it returns `ErrNotFound` / `ErrConflict`.
 - **Draft filtering lives in the store**, not in handlers, so a new endpoint
   cannot leak unpublished content.
+- **Localization lives in the store too.** Public reads take a locale and get
+  Danish overlaid on English; admin reads pass `""` and get the raw record with
+  `translations`. Site chrome strings go in `web/lib/i18n/dictionaries.ts`, in
+  both languages. See `docs/i18n.md`.
 - **Migrations are append-only.** Never edit a shipped `*.sql`; add the next
   numbered file.
 - **`web/lib/api/types.ts` mirrors `api/internal/models`.** Nothing enforces

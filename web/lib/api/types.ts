@@ -12,6 +12,36 @@ export type CVKind =
   | "certification"
   | "other";
 
+/** models.Locale. "en" is the default and lives in the base fields. */
+export type Locale = "en" | "da";
+
+/** The locales stored in a record's `translations`, i.e. all but the default. */
+export type TranslatedLocale = Exclude<Locale, "en">;
+
+export type Translations<T> = Partial<Record<TranslatedLocale, T>>;
+
+/** Empty fields fall back to the English base field on the public site. */
+export interface PostTranslation {
+  title: string;
+  summary: string;
+  body_markdown: string;
+}
+
+export interface ProjectTranslation {
+  title: string;
+  tagline: string;
+  body_markdown: string;
+}
+
+/** An empty highlights list falls back as a whole, not bullet by bullet. */
+export interface CVEntryTranslation {
+  title: string;
+  organization: string;
+  location: string;
+  description_markdown: string;
+  highlights: string[];
+}
+
 export interface Media {
   id: string;
   url: string;
@@ -38,6 +68,13 @@ export interface Post {
   published_at?: string | null;
   created_at: string;
   updated_at: string;
+  /** Admin reads only. Public reads are already localized. */
+  translations?: Translations<PostTranslation>;
+  /**
+   * Public reads only: the language the body was served in. Differs from the
+   * requested locale when the body is untranslated and fell back to English.
+   */
+  locale?: Locale;
 }
 
 export interface Project {
@@ -59,6 +96,9 @@ export interface Project {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** Same contract as Post.translations and Post.locale. */
+  translations?: Translations<ProjectTranslation>;
+  locale?: Locale;
 }
 
 export interface CVEntry {
@@ -75,6 +115,8 @@ export interface CVEntry {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** Admin reads only. Public reads are already localized. */
+  translations?: Translations<CVEntryTranslation>;
 }
 
 export interface User {
@@ -101,20 +143,33 @@ export interface SocialLink {
   url: string;
 }
 
-/** The three settings blobs, as returned by GET /api/v1/settings. */
+export interface SiteSettingsText {
+  tagline?: string;
+  description?: string;
+  location?: string;
+}
+
+export interface AboutSettingsText {
+  heading?: string;
+  body_markdown?: string;
+}
+
+/**
+ * The three settings blobs, as returned by GET /api/v1/settings.
+ *
+ * `translations` only appears on the admin read; the public read has already
+ * overlaid the requested locale's strings onto the base fields.
+ */
 export interface Settings {
-  site: {
+  site: SiteSettingsText & {
     title?: string;
-    tagline?: string;
-    description?: string;
     email?: string;
-    location?: string;
+    translations?: Translations<SiteSettingsText>;
   };
-  about: {
-    heading?: string;
-    body_markdown?: string;
+  about: AboutSettingsText & {
     avatar_media_id?: string | null;
     avatar_url?: string | null;
+    translations?: Translations<AboutSettingsText>;
   };
   socials: {
     links?: SocialLink[];
@@ -131,6 +186,7 @@ export interface PostInput {
   tags: string[];
   status: Status;
   published_at: string | null;
+  translations: Translations<PostTranslation>;
 }
 
 export interface ProjectInput {
@@ -148,6 +204,7 @@ export interface ProjectInput {
   featured: boolean;
   status: Status;
   sort_order: number;
+  translations: Translations<ProjectTranslation>;
 }
 
 export interface CVEntryInput {
@@ -161,4 +218,5 @@ export interface CVEntryInput {
   description_markdown: string;
   highlights: string[];
   sort_order: number;
+  translations: Translations<CVEntryTranslation>;
 }

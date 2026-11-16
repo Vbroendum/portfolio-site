@@ -40,7 +40,8 @@ For working on the code without rebuilding images every time, see
 | `api/internal/migrations` | Append-only `*.sql` schema history |
 | `api/internal/auth` | argon2id passwords, JWT session cookie |
 | `api/internal/media` | Upload storage (local disk today, S3-ready) |
-| `web/app/(site)` | The public pages |
+| `web/app/[lang]` | The public pages, once per locale (`/en`, `/da`) |
+| `web/lib/i18n` | Locale config, UI dictionaries, locale helpers |
 | `web/app/admin` | The CMS |
 | `web/lib/api` | Typed API client, split server/browser |
 | `web/components` | Shared UI, including the demo renderers |
@@ -62,6 +63,7 @@ For working on the code without rebuilding images every time, see
 | [cms.md](docs/cms.md) | You are publishing content, not writing code |
 | [deployment.md](docs/deployment.md) | You are putting it on a server |
 | [ci-cd.md](docs/ci-cd.md) | You want to know how a branch becomes a deploy |
+| [i18n.md](docs/i18n.md) | You are touching anything that has a Danish version |
 | [recipes.md](docs/recipes.md) | You want a step-by-step for a common change |
 
 ## Common commands

@@ -13,7 +13,7 @@
 │   web  :3000   │───────────────▶│    api  :8080    │
 │   Next.js 16   │   fetch+tags   │   Go 1.26 / chi  │
 │                │                │                  │
-│  (site)  public│                │  /api/v1/...     │
+│  [lang]  public│                │  /api/v1/...     │
 │  /admin  CMS   │                │  /media/...      │
 └────────────────┘                └────────┬─────────┘
                                            │
@@ -88,6 +88,11 @@ Two rules keep this honest:
 
 Drafts are invisible to every public endpoint - that filter lives in the store,
 not in the handler, so a new endpoint cannot forget it.
+
+Content is bilingual. English lives in the ordinary columns; Danish lives in a
+`translations` JSONB column per row and is overlaid by the store when a public
+endpoint is called with `?lang=da`, falling back to English per field. The
+frontend serves each page under `/en` or `/da`. See [i18n.md](i18n.md).
 
 ## Auth model
 

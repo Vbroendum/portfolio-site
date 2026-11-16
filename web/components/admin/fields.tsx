@@ -41,12 +41,15 @@ export function TextInput({
   placeholder,
   type = "text",
   required,
+  lang,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
   required?: boolean;
+  /** Sets the browser's spellcheck language. */
+  lang?: string;
 }) {
   return (
     <input
@@ -54,6 +57,7 @@ export function TextInput({
       value={value}
       required={required}
       placeholder={placeholder}
+      lang={lang}
       onChange={(e) => onChange(e.target.value)}
       className={inputBase}
     />
@@ -65,17 +69,20 @@ export function TextArea({
   onChange,
   rows = 4,
   placeholder,
+  lang,
 }: {
   value: string;
   onChange: (value: string) => void;
   rows?: number;
   placeholder?: string;
+  lang?: string;
 }) {
   return (
     <textarea
       value={value}
       rows={rows}
       placeholder={placeholder}
+      lang={lang}
       onChange={(e) => onChange(e.target.value)}
       className={`${inputBase} resize-y leading-relaxed`}
     />

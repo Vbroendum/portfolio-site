@@ -24,6 +24,9 @@ type PostInput struct {
 	Tags         []string      `json:"tags"`
 	Status       models.Status `json:"status"`
 	PublishedAt  *time.Time    `json:"published_at"`
+	// Translations replaces every non-default locale at once. Omit it and
+	// the post has no translations.
+	Translations map[models.Locale]models.PostTranslation `json:"translations"`
 }
 
 // PostFilter narrows a list query. Zero value = published posts, newest first.
@@ -34,11 +37,14 @@ type PostFilter struct {
 	Search        string
 	Limit         int
 	Offset        int
+	// Locale localizes the results; "" returns them raw (see i18n.go).
+	Locale models.Locale
 }
 
 const postColumns = `
 	p.id, p.slug, p.title, p.summary, p.body_markdown, p.cover_media_id,
 	p.tags, p.status, p.reading_minutes, p.published_at, p.created_at, p.updated_at,
+	p.translations,
 	m.id, m.storage_key, m.filename, m.content_type, m.size_bytes, m.width, m.height, m.alt_text, m.created_at`
 
 func (s *Store) scanPost(row pgx.Row) (*models.Post, error) {
@@ -52,6 +58,7 @@ func (s *Store) scanPost(row pgx.Row) (*models.Post, error) {
 	err := row.Scan(
 		&p.ID, &p.Slug, &p.Title, &p.Summary, &p.BodyMarkdown, &p.CoverMediaID,
 		&p.Tags, &p.Status, &p.ReadingMinutes, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+		&p.Translations,
 		&mID, &mKey, &mFilename, &mType, &mSize, &mW, &mH, &mAlt, &mCreated,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -88,8 +95,8 @@ func (s *Store) ListPosts(ctx context.Context, f PostFilter) ([]models.Post, int
 		args = append(args, f.Search)
 		n := len(args)
 		where = append(where, fmt.Sprintf(
-			"(p.title ILIKE '%%' || $%d || '%%' OR p.summary ILIKE '%%' || $%d || '%%' OR p.body_markdown ILIKE '%%' || $%d || '%%')",
-			n, n, n))
+			"(p.title ILIKE '%%' || $%d || '%%' OR p.summary ILIKE '%%' || $%d || '%%' OR p.body_markdown ILIKE '%%' || $%d || '%%' OR p.translations::text ILIKE '%%' || $%d || '%%')",
+			n, n, n, n))
 	}
 	clause := ""
 	if len(where) > 0 {
@@ -126,12 +133,13 @@ func (s *Store) ListPosts(ctx context.Context, f PostFilter) ([]models.Post, int
 		if err != nil {
 			return nil, 0, err
 		}
+		localizePost(p, f.Locale)
 		out = append(out, *p)
 	}
 	return out, total, rows.Err()
 }
 
-func (s *Store) GetPostBySlug(ctx context.Context, slug string, includeDrafts bool) (*models.Post, error) {
+func (s *Store) GetPostBySlug(ctx context.Context, slug string, includeDrafts bool, loc models.Locale) (*models.Post, error) {
 	q := fmt.Sprintf(`
 		SELECT %s FROM posts p
 		LEFT JOIN media m ON m.id = p.cover_media_id
@@ -139,7 +147,12 @@ func (s *Store) GetPostBySlug(ctx context.Context, slug string, includeDrafts bo
 	if !includeDrafts {
 		q += ` AND p.status = 'published' AND p.published_at IS NOT NULL AND p.published_at <= now()`
 	}
-	return s.scanPost(s.pool.QueryRow(ctx, q, slug))
+	p, err := s.scanPost(s.pool.QueryRow(ctx, q, slug))
+	if err != nil {
+		return nil, err
+	}
+	localizePost(p, loc)
+	return p, nil
 }
 
 func (s *Store) GetPost(ctx context.Context, id uuid.UUID) (*models.Post, error) {
@@ -147,7 +160,12 @@ func (s *Store) GetPost(ctx context.Context, id uuid.UUID) (*models.Post, error)
 		SELECT %s FROM posts p
 		LEFT JOIN media m ON m.id = p.cover_media_id
 		WHERE p.id = $1`, postColumns)
-	return s.scanPost(s.pool.QueryRow(ctx, q, id))
+	p, err := s.scanPost(s.pool.QueryRow(ctx, q, id))
+	if err != nil {
+		return nil, err
+	}
+	localizePost(p, "")
+	return p, nil
 }
 
 func (s *Store) CreatePost(ctx context.Context, in PostInput) (*models.Post, error) {
@@ -169,13 +187,18 @@ func (s *Store) CreatePost(ctx context.Context, in PostInput) (*models.Post, err
 		in.Tags = []string{}
 	}
 
+	translations, err := translationsJSON(in.Translations)
+	if err != nil {
+		return nil, err
+	}
+
 	var id uuid.UUID
-	err := s.pool.QueryRow(ctx, `
-		INSERT INTO posts (slug, title, summary, body_markdown, cover_media_id, tags, status, reading_minutes, published_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO posts (slug, title, summary, body_markdown, cover_media_id, tags, status, reading_minutes, published_at, translations)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text::jsonb)
 		RETURNING id`,
 		slug, in.Title, in.Summary, in.BodyMarkdown, in.CoverMediaID, in.Tags,
-		in.Status, ReadingMinutes(in.BodyMarkdown), in.PublishedAt,
+		in.Status, ReadingMinutes(in.BodyMarkdown), in.PublishedAt, translations,
 	).Scan(&id)
 	if err != nil {
 		return nil, mapErr(err)
@@ -198,13 +221,19 @@ func (s *Store) UpdatePost(ctx context.Context, id uuid.UUID, in PostInput) (*mo
 		in.PublishedAt = &now
 	}
 
+	translations, err := translationsJSON(in.Translations)
+	if err != nil {
+		return nil, err
+	}
+
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE posts SET
 			slug = $2, title = $3, summary = $4, body_markdown = $5, cover_media_id = $6,
-			tags = $7, status = $8, reading_minutes = $9, published_at = $10, updated_at = now()
+			tags = $7, status = $8, reading_minutes = $9, published_at = $10,
+			translations = $11::text::jsonb, updated_at = now()
 		WHERE id = $1`,
 		id, slug, in.Title, in.Summary, in.BodyMarkdown, in.CoverMediaID, in.Tags,
-		in.Status, ReadingMinutes(in.BodyMarkdown), in.PublishedAt,
+		in.Status, ReadingMinutes(in.BodyMarkdown), in.PublishedAt, translations,
 	)
 	if err != nil {
 		return nil, mapErr(err)

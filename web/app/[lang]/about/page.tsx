@@ -3,24 +3,36 @@ import type { Metadata } from "next";
 import { Markdown } from "@/components/markdown";
 import { EmptyState } from "@/components/ui";
 import { FALLBACK_SETTINGS, getSettings } from "@/lib/api/server";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { alternatesFor, localeFromParams } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "About" };
+type Props = { params: Promise<{ lang: string }> };
 
-export default async function AboutPage() {
-  const settings = await getSettings().catch(() => FALLBACK_SETTINGS);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const locale = await localeFromParams(params);
+  return {
+    title: getDictionary(locale).about.title,
+    alternates: await alternatesFor(locale, "/about"),
+  };
+}
+
+export default async function AboutPage({ params }: Props) {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
+  const settings = await getSettings(locale).catch(() => FALLBACK_SETTINGS);
   const about = settings.about ?? {};
   const socials = settings.socials?.links ?? [];
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
-      <h1 className="text-3xl">{about.heading || "About"}</h1>
+      <h1 className="text-3xl">{about.heading || dict.about.title}</h1>
 
       <div className="mt-8">
         {about.body_markdown ? (
           <Markdown>{about.body_markdown}</Markdown>
         ) : (
           <EmptyState authoringHint="Write it in the CMS at /admin/settings.">
-            Nothing here yet.
+            {dict.about.empty}
           </EmptyState>
         )}
       </div>

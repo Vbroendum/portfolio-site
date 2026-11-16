@@ -29,8 +29,9 @@ func (s *Store) GetSetting(ctx context.Context, key string) (*models.Setting, er
 }
 
 // GetAllSettings returns every blob keyed by name. The frontend fetches this
-// once per render to build the header, footer and SEO tags.
-func (s *Store) GetAllSettings(ctx context.Context) (map[string]map[string]any, error) {
+// once per render to build the header, footer and SEO tags. loc localizes each
+// blob; "" returns them raw, translations included, for the CMS.
+func (s *Store) GetAllSettings(ctx context.Context, loc models.Locale) (map[string]map[string]any, error) {
 	rows, err := s.pool.Query(ctx, `SELECT key, value FROM settings`)
 	if err != nil {
 		return nil, err
@@ -47,6 +48,7 @@ func (s *Store) GetAllSettings(ctx context.Context) (map[string]map[string]any, 
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return nil, err
 		}
+		localizeSetting(v, loc)
 		out[key] = v
 	}
 	return out, rows.Err()

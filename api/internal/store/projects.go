@@ -29,6 +29,8 @@ type ProjectInput struct {
 	Featured        bool          `json:"featured"`
 	Status          models.Status `json:"status"`
 	SortOrder       int           `json:"sort_order"`
+	// Translations replaces every non-default locale at once.
+	Translations map[models.Locale]models.ProjectTranslation `json:"translations"`
 }
 
 type ProjectFilter struct {
@@ -37,12 +39,14 @@ type ProjectFilter struct {
 	Tech          string
 	Limit         int
 	Offset        int
+	// Locale localizes the results; "" returns them raw (see i18n.go).
+	Locale models.Locale
 }
 
 const projectColumns = `
 	p.id, p.slug, p.title, p.tagline, p.body_markdown, p.tech, p.repo_url, p.live_url,
 	p.demo_type, p.demo_url, p.cover_media_id, p.featured, p.status, p.sort_order,
-	p.created_at, p.updated_at,
+	p.created_at, p.updated_at, p.translations,
 	m.id, m.storage_key, m.filename, m.content_type, m.size_bytes, m.width, m.height, m.alt_text, m.created_at`
 
 func (s *Store) scanProject(row pgx.Row) (*models.Project, error) {
@@ -56,7 +60,7 @@ func (s *Store) scanProject(row pgx.Row) (*models.Project, error) {
 	err := row.Scan(
 		&p.ID, &p.Slug, &p.Title, &p.Tagline, &p.BodyMarkdown, &p.Tech, &p.RepoURL, &p.LiveURL,
 		&p.DemoType, &p.DemoURL, &p.CoverMediaID, &p.Featured, &p.Status, &p.SortOrder,
-		&p.CreatedAt, &p.UpdatedAt,
+		&p.CreatedAt, &p.UpdatedAt, &p.Translations,
 		&mID, &mKey, &mFilename, &mType, &mSize, &mW, &mH, &mAlt, &mCreated,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -161,6 +165,7 @@ func (s *Store) ListProjects(ctx context.Context, f ProjectFilter) ([]models.Pro
 			rows.Close()
 			return nil, 0, err
 		}
+		localizeProject(p, f.Locale)
 		out = append(out, *p)
 	}
 	rows.Close()
@@ -173,7 +178,7 @@ func (s *Store) ListProjects(ctx context.Context, f ProjectFilter) ([]models.Pro
 	return out, total, nil
 }
 
-func (s *Store) getProjectBy(ctx context.Context, cond string, arg any, includeDrafts bool) (*models.Project, error) {
+func (s *Store) getProjectBy(ctx context.Context, cond string, arg any, includeDrafts bool, loc models.Locale) (*models.Project, error) {
 	q := fmt.Sprintf(`
 		SELECT %s FROM projects p
 		LEFT JOIN media m ON m.id = p.cover_media_id
@@ -185,6 +190,7 @@ func (s *Store) getProjectBy(ctx context.Context, cond string, arg any, includeD
 	if err != nil {
 		return nil, err
 	}
+	localizeProject(p, loc)
 	list := []models.Project{*p}
 	if err := s.loadGalleries(ctx, list); err != nil {
 		return nil, err
@@ -192,16 +198,20 @@ func (s *Store) getProjectBy(ctx context.Context, cond string, arg any, includeD
 	return &list[0], nil
 }
 
-func (s *Store) GetProjectBySlug(ctx context.Context, slug string, includeDrafts bool) (*models.Project, error) {
-	return s.getProjectBy(ctx, "p.slug = $1", slug, includeDrafts)
+func (s *Store) GetProjectBySlug(ctx context.Context, slug string, includeDrafts bool, loc models.Locale) (*models.Project, error) {
+	return s.getProjectBy(ctx, "p.slug = $1", slug, includeDrafts, loc)
 }
 
 func (s *Store) GetProject(ctx context.Context, id uuid.UUID) (*models.Project, error) {
-	return s.getProjectBy(ctx, "p.id = $1", id, true)
+	return s.getProjectBy(ctx, "p.id = $1", id, true, "")
 }
 
 func (s *Store) CreateProject(ctx context.Context, in ProjectInput) (*models.Project, error) {
 	in.normalise()
+	translations, err := translationsJSON(in.Translations)
+	if err != nil {
+		return nil, err
+	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -212,11 +222,13 @@ func (s *Store) CreateProject(ctx context.Context, in ProjectInput) (*models.Pro
 	var id uuid.UUID
 	err = tx.QueryRow(ctx, `
 		INSERT INTO projects (slug, title, tagline, body_markdown, tech, repo_url, live_url,
-		                      demo_type, demo_url, cover_media_id, featured, status, sort_order)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		                      demo_type, demo_url, cover_media_id, featured, status, sort_order,
+		                      translations)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::text::jsonb)
 		RETURNING id`,
 		in.Slug, in.Title, in.Tagline, in.BodyMarkdown, in.Tech, in.RepoURL, in.LiveURL,
 		in.DemoType, in.DemoURL, in.CoverMediaID, in.Featured, in.Status, in.SortOrder,
+		translations,
 	).Scan(&id)
 	if err != nil {
 		return nil, mapErr(err)
@@ -232,6 +244,10 @@ func (s *Store) CreateProject(ctx context.Context, in ProjectInput) (*models.Pro
 
 func (s *Store) UpdateProject(ctx context.Context, id uuid.UUID, in ProjectInput) (*models.Project, error) {
 	in.normalise()
+	translations, err := translationsJSON(in.Translations)
+	if err != nil {
+		return nil, err
+	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -243,10 +259,11 @@ func (s *Store) UpdateProject(ctx context.Context, id uuid.UUID, in ProjectInput
 		UPDATE projects SET
 			slug=$2, title=$3, tagline=$4, body_markdown=$5, tech=$6, repo_url=$7, live_url=$8,
 			demo_type=$9, demo_url=$10, cover_media_id=$11, featured=$12, status=$13,
-			sort_order=$14, updated_at=now()
+			sort_order=$14, translations=$15::text::jsonb, updated_at=now()
 		WHERE id=$1`,
 		id, in.Slug, in.Title, in.Tagline, in.BodyMarkdown, in.Tech, in.RepoURL, in.LiveURL,
 		in.DemoType, in.DemoURL, in.CoverMediaID, in.Featured, in.Status, in.SortOrder,
+		translations,
 	)
 	if err != nil {
 		return nil, mapErr(err)

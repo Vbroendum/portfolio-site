@@ -24,6 +24,8 @@ type CVEntryInput struct {
 	DescriptionMarkdown string        `json:"description_markdown"`
 	Highlights          []string      `json:"highlights"`
 	SortOrder           int           `json:"sort_order"`
+	// Translations replaces every non-default locale at once.
+	Translations map[models.Locale]models.CVEntryTranslation `json:"translations"`
 }
 
 const dateLayout = "2006-01-02"
@@ -52,7 +54,7 @@ func scanCVEntry(row pgx.Row) (*models.CVEntry, error) {
 	var start, end *time.Time
 	err := row.Scan(&e.ID, &e.Kind, &e.Title, &e.Organization, &e.Location,
 		&start, &end, &e.IsCurrent, &e.DescriptionMarkdown, &e.Highlights,
-		&e.SortOrder, &e.CreatedAt, &e.UpdatedAt)
+		&e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.Translations)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -65,11 +67,13 @@ func scanCVEntry(row pgx.Row) (*models.CVEntry, error) {
 }
 
 const cvColumns = `id, kind, title, organization, location, start_date, end_date,
-	is_current, description_markdown, highlights, sort_order, created_at, updated_at`
+	is_current, description_markdown, highlights, sort_order, created_at, updated_at,
+	translations`
 
 // ListCVEntries returns every entry ordered for display: grouped by kind, then
-// by sort_order, then most recent first.
-func (s *Store) ListCVEntries(ctx context.Context, kind string) ([]models.CVEntry, error) {
+// by sort_order, then most recent first. loc localizes them; "" returns them
+// raw for the CMS (see i18n.go).
+func (s *Store) ListCVEntries(ctx context.Context, kind string, loc models.Locale) ([]models.CVEntry, error) {
 	q := `SELECT ` + cvColumns + ` FROM cv_entries`
 	args := []any{}
 	if kind != "" {
@@ -89,13 +93,19 @@ func (s *Store) ListCVEntries(ctx context.Context, kind string) ([]models.CVEntr
 		if err != nil {
 			return nil, err
 		}
+		localizeCVEntry(e, loc)
 		out = append(out, *e)
 	}
 	return out, rows.Err()
 }
 
 func (s *Store) GetCVEntry(ctx context.Context, id uuid.UUID) (*models.CVEntry, error) {
-	return scanCVEntry(s.pool.QueryRow(ctx, `SELECT `+cvColumns+` FROM cv_entries WHERE id = $1`, id))
+	e, err := scanCVEntry(s.pool.QueryRow(ctx, `SELECT `+cvColumns+` FROM cv_entries WHERE id = $1`, id))
+	if err != nil {
+		return nil, err
+	}
+	localizeCVEntry(e, "")
+	return e, nil
 }
 
 func (s *Store) CreateCVEntry(ctx context.Context, in CVEntryInput) (*models.CVEntry, error) {
@@ -113,13 +123,18 @@ func (s *Store) CreateCVEntry(ctx context.Context, in CVEntryInput) (*models.CVE
 	if in.Highlights == nil {
 		in.Highlights = []string{}
 	}
+	translations, err := translationsJSON(in.Translations)
+	if err != nil {
+		return nil, err
+	}
 	var id uuid.UUID
 	err = s.pool.QueryRow(ctx, `
 		INSERT INTO cv_entries (kind, title, organization, location, start_date, end_date,
-		                        is_current, description_markdown, highlights, sort_order)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+		                        is_current, description_markdown, highlights, sort_order,
+		                        translations)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::text::jsonb) RETURNING id`,
 		in.Kind, in.Title, in.Organization, in.Location, start, end,
-		in.IsCurrent, in.DescriptionMarkdown, in.Highlights, in.SortOrder,
+		in.IsCurrent, in.DescriptionMarkdown, in.Highlights, in.SortOrder, translations,
 	).Scan(&id)
 	if err != nil {
 		return nil, mapErr(err)
@@ -139,13 +154,17 @@ func (s *Store) UpdateCVEntry(ctx context.Context, id uuid.UUID, in CVEntryInput
 	if in.Highlights == nil {
 		in.Highlights = []string{}
 	}
+	translations, err := translationsJSON(in.Translations)
+	if err != nil {
+		return nil, err
+	}
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE cv_entries SET kind=$2, title=$3, organization=$4, location=$5,
 			start_date=$6, end_date=$7, is_current=$8, description_markdown=$9,
-			highlights=$10, sort_order=$11, updated_at=now()
+			highlights=$10, sort_order=$11, translations=$12::text::jsonb, updated_at=now()
 		WHERE id=$1`,
 		id, in.Kind, in.Title, in.Organization, in.Location, start, end,
-		in.IsCurrent, in.DescriptionMarkdown, in.Highlights, in.SortOrder)
+		in.IsCurrent, in.DescriptionMarkdown, in.Highlights, in.SortOrder, translations)
 	if err != nil {
 		return nil, mapErr(err)
 	}

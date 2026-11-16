@@ -16,7 +16,11 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetProjectBySlug(w http.ResponseWriter, r *http.Request) {
-	p, err := s.store.GetProjectBySlug(r.Context(), chi.URLParam(r, "slug"), false)
+	loc, ok := publicLocale(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.store.GetProjectBySlug(r.Context(), chi.URLParam(r, "slug"), false, loc)
 	if err != nil {
 		writeStoreErr(w, err, "project")
 		return
@@ -103,7 +107,17 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 // ---- shared ---------------------------------------------------------------
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request, includeDrafts bool) {
+	// Admin lists are raw so the CMS sees every language; public ones are
+	// localized.
+	var loc models.Locale
+	if !includeDrafts {
+		var ok bool
+		if loc, ok = publicLocale(w, r); !ok {
+			return
+		}
+	}
 	f := store.ProjectFilter{
+		Locale:        loc,
 		IncludeDrafts: includeDrafts,
 		FeaturedOnly:  queryBool(r, "featured"),
 		Tech:          r.URL.Query().Get("tech"),
@@ -143,5 +157,5 @@ func validateProject(w http.ResponseWriter, in store.ProjectInput) bool {
 			return false
 		}
 	}
-	return true
+	return validTranslations(w, in.Translations)
 }

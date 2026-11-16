@@ -14,6 +14,7 @@ import {
   TextInput,
   Toggle,
 } from "@/components/admin/fields";
+import { LocaleTabs } from "@/components/admin/locale-tabs";
 import { MarkdownEditor } from "@/components/admin/markdown-editor";
 import { MediaPicker } from "@/components/admin/media-picker";
 import { AdminHeader } from "@/components/admin/shell";
@@ -23,7 +24,15 @@ import {
   revalidate,
   updateProject,
 } from "@/lib/api/admin";
-import type { DemoType, ProjectInput, Status } from "@/lib/api/types";
+import type {
+  DemoType,
+  Locale,
+  ProjectInput,
+  ProjectTranslation,
+  Status,
+} from "@/lib/api/types";
+import { DEFAULT_LOCALE, localePath } from "@/lib/i18n/config";
+import { hasTranslation, translatable } from "@/lib/i18n/editing";
 
 const EMPTY: ProjectInput = {
   slug: "",
@@ -40,6 +49,13 @@ const EMPTY: ProjectInput = {
   featured: false,
   status: "draft",
   sort_order: 0,
+  translations: {},
+};
+
+const EMPTY_TRANSLATION: ProjectTranslation = {
+  title: "",
+  tagline: "",
+  body_markdown: "",
 };
 
 /** What demo_url means for each demo type, shown under the field. */
@@ -62,6 +78,8 @@ export default function ProjectEditor() {
     message?: string;
   }>({ kind: "idle" });
   const [loaded, setLoaded] = useState(isNew);
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const t = translatable(form, setForm, locale, EMPTY_TRANSLATION);
 
   useEffect(() => {
     if (isNew) return;
@@ -82,6 +100,7 @@ export default function ProjectEditor() {
           featured: p.featured,
           status: p.status,
           sort_order: p.sort_order,
+          translations: p.translations ?? {},
         }),
       )
       .catch((err: unknown) =>
@@ -124,7 +143,7 @@ export default function ProjectEditor() {
       <AdminHeader title={isNew ? "New project" : "Edit project"}>
         {!isNew && form.status === "published" ? (
           <Link
-            href={`/projects/${form.slug}`}
+            href={localePath(locale, `/projects/${form.slug}`)}
             target="_blank"
             className="font-mono text-[13px] text-muted no-underline hover:text-accent"
           >
@@ -139,8 +158,19 @@ export default function ProjectEditor() {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_17rem]">
         <div className="space-y-4">
+          <LocaleTabs
+            value={locale}
+            onChange={setLocale}
+            filled={{ da: hasTranslation(form.translations.da) }}
+          />
+
           <Field label="title">
-            <TextInput value={form.title} onChange={(v) => set("title", v)} />
+            <TextInput
+              value={t.value("title")}
+              onChange={(v) => t.set("title", v)}
+              placeholder={t.fallback("title")}
+              lang={locale}
+            />
           </Field>
 
           <Field
@@ -148,9 +178,11 @@ export default function ProjectEditor() {
             hint="One line. It carries the project in every list."
           >
             <TextArea
-              value={form.tagline}
-              onChange={(v) => set("tagline", v)}
+              value={t.value("tagline")}
+              onChange={(v) => t.set("tagline", v)}
+              placeholder={t.fallback("tagline")}
               rows={2}
+              lang={locale}
             />
           </Field>
 
@@ -159,9 +191,12 @@ export default function ProjectEditor() {
               case study
             </span>
             <MarkdownEditor
-              value={form.body_markdown}
-              onChange={(v) => set("body_markdown", v)}
+              key={locale}
+              value={t.value("body_markdown")}
+              onChange={(v) => t.set("body_markdown", v)}
+              placeholder={t.fallback("body_markdown") || undefined}
               rows={16}
+              lang={locale}
             />
           </div>
 

@@ -4,31 +4,40 @@ import Link from "next/link";
 import { Chip, EmptyState } from "@/components/ui";
 import { emptyList, getProjects } from "@/lib/api/server";
 import type { Project } from "@/lib/api/types";
+import { localePath } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { alternatesFor, localeFromParams } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Work",
-  description: "Projects, with demos you can actually run.",
-};
+type Props = { params: Promise<{ lang: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
+  return {
+    title: dict.projects.title,
+    description: dict.projects.description,
+    alternates: await alternatesFor(locale, "/projects"),
+  };
+}
 
 /**
  * A list, not a card grid: every project gets the same horizontal band, so the
  * eye compares titles and taglines instead of thumbnails.
  */
-export default async function ProjectsPage() {
-  const projects = await getProjects().catch(emptyList<Project>);
+export default async function ProjectsPage({ params }: Props) {
+  const locale = await localeFromParams(params);
+  const dict = getDictionary(locale);
+  const projects = await getProjects({ locale }).catch(emptyList<Project>);
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
-      <h1 className="text-3xl">Work</h1>
-      <p className="mt-2 max-w-[58ch] text-muted">
-        Things I have built. Most have a demo you can poke at on the project
-        page.
-      </p>
+      <h1 className="text-3xl">{dict.projects.title}</h1>
+      <p className="mt-2 max-w-[58ch] text-muted">{dict.projects.intro}</p>
 
       {projects.items.length === 0 ? (
         <div className="mt-10">
           <EmptyState authoringHint="Add one in the CMS at /admin/projects.">
-            No projects published yet.
+            {dict.projects.empty}
           </EmptyState>
         </div>
       ) : (
@@ -36,7 +45,7 @@ export default async function ProjectsPage() {
           {projects.items.map((project) => (
             <li key={project.id}>
               <Link
-                href={`/projects/${project.slug}`}
+                href={localePath(locale, `/projects/${project.slug}`)}
                 className="group block py-6 no-underline"
               >
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -45,7 +54,7 @@ export default async function ProjectsPage() {
                   </h2>
                   {project.featured ? (
                     <span className="font-mono text-[11px] text-accent-dim">
-                      featured
+                      {dict.projects.featured}
                     </span>
                   ) : null}
                 </div>

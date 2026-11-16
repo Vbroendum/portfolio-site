@@ -5,15 +5,16 @@ Next.js 16, App Router, TypeScript, Tailwind v4. Dark only.
 ## Route map
 
 ```
+proxy.ts                  locale redirects for unprefixed URLs (see i18n.md)
 app/
-  layout.tsx              fonts, <html>, metadata from the CMS
+  layout.tsx              fonts, <html lang>, metadataBase
   globals.css             design tokens, prose styles, syntax colours
   robots.ts  sitemap.ts
-  feed.xml/route.ts       proxies the API's RSS
+  feed.xml/route.ts       the English feed, for old subscribers
   api/revalidate/route.ts cache purge, authorised via the API
 
-  (site)/                 public pages, wrapped in header + footer
-    layout.tsx            force-dynamic lives here
+  [lang]/                 public pages, one tree per locale (en, da)
+    layout.tsx            force-dynamic, header + footer, site metadata
     page.tsx              home
     projects/page.tsx     list
     projects/[slug]/      case study + demo
@@ -21,7 +22,10 @@ app/
     blog/[slug]/          post
     cv/page.tsx
     about/page.tsx
+    feed.xml/route.ts     per-locale feed
+    opengraph-image.tsx   per-locale link preview card
     not-found.tsx
+    [...rest]/page.tsx    404s unknown paths inside the site chrome
 
   admin/
     login/page.tsx        outside the guard on purpose
@@ -58,7 +62,7 @@ match on a laptop.
 
 ## Caching
 
-Public pages are `force-dynamic` (set once, in `app/(site)/layout.tsx`), while
+Public pages are `force-dynamic` (set once, in `app/[lang]/layout.tsx`), while
 the `fetch` calls underneath them are cached and tagged.
 
 The reason: pages are prerendered during `next build`, when the API is normally
@@ -87,7 +91,7 @@ empty:
 - `/blog` is left out of `sitemap.xml`.
 
 The switch is a single `getPosts({ limit: 1 }).total > 0` in
-`app/(site)/layout.tsx`, passed down as `showBlog` / `showRss`. It rides the
+`app/[lang]/layout.tsx`, passed down as `showBlog` / `showRss`. It rides the
 `posts` cache tag, so it costs nothing per visitor, and publishing the first
 post brings everything back with no setting to remember.
 
@@ -151,10 +155,13 @@ navigate the parent page.
 
 ## Adding a public page
 
-1. Create `app/(site)/<name>/page.tsx` as an async Server Component.
-2. Fetch through `lib/api/server.ts` - add a function there rather than calling
-   `fetch` inline, so the tag stays with the query.
+1. Create `app/[lang]/<name>/page.tsx` as an async Server Component, and resolve
+   the locale with `localeFromParams(params)` from `lib/i18n/server.ts`.
+2. Fetch through `lib/api/server.ts`, passing the locale - add a function there
+   rather than calling `fetch` inline, so the tag stays with the query.
 3. Give failures a fallback (`emptyList`, `FALLBACK_SETTINGS`) so a build
    without an API still succeeds.
-4. Export `metadata` or `generateMetadata`.
-5. Add it to `NAV` in `components/site-header.tsx` and to `app/sitemap.ts`.
+4. Put its strings in both dictionaries in `lib/i18n/dictionaries.ts`, and
+   build links with `localePath(locale, "/<name>")`.
+5. Export `generateMetadata`, with `alternates: await alternatesFor(locale, "/<name>")`.
+6. Add it to `NAV` in `components/site-header.tsx` and to `app/sitemap.ts`.

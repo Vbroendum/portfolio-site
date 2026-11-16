@@ -12,6 +12,7 @@ import {
   TextInput,
   Toggle,
 } from "@/components/admin/fields";
+import { LocaleTabs } from "@/components/admin/locale-tabs";
 import { AdminHeader } from "@/components/admin/shell";
 import {
   createCV,
@@ -20,7 +21,15 @@ import {
   revalidate,
   updateCV,
 } from "@/lib/api/admin";
-import type { CVEntry, CVEntryInput, CVKind } from "@/lib/api/types";
+import type {
+  CVEntry,
+  CVEntryInput,
+  CVEntryTranslation,
+  CVKind,
+  Locale,
+} from "@/lib/api/types";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { hasTranslation, translatable } from "@/lib/i18n/editing";
 
 const KINDS: { value: CVKind; label: string }[] = [
   { value: "experience", label: "experience" },
@@ -41,6 +50,15 @@ const EMPTY: CVEntryInput = {
   description_markdown: "",
   highlights: [],
   sort_order: 0,
+  translations: {},
+};
+
+const EMPTY_TRANSLATION: CVEntryTranslation = {
+  title: "",
+  organization: "",
+  location: "",
+  description_markdown: "",
+  highlights: [],
 };
 
 /**
@@ -55,6 +73,8 @@ export default function CVPage() {
     kind: "idle" | "saving" | "saved" | "error";
     message?: string;
   }>({ kind: "idle" });
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const t = translatable(form, setForm, locale, EMPTY_TRANSLATION);
 
   async function refresh() {
     const res = await listCV();
@@ -97,6 +117,7 @@ export default function CVPage() {
       description_markdown: entry.description_markdown,
       highlights: entry.highlights,
       sort_order: entry.sort_order,
+      translations: entry.translations ?? {},
     });
   }
 
@@ -139,6 +160,11 @@ export default function CVPage() {
 
       {editing ? (
         <div className="mb-8 space-y-4 rounded border border-accent-dim bg-accent-wash/40 p-4">
+          <LocaleTabs
+            value={locale}
+            onChange={setLocale}
+            filled={{ da: hasTranslation(form.translations.da) }}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="kind">
               <Select<CVKind>
@@ -158,18 +184,27 @@ export default function CVPage() {
               label="title"
               hint="The role, degree, or - for skills - the skill itself."
             >
-              <TextInput value={form.title} onChange={(v) => set("title", v)} />
+              <TextInput
+                value={t.value("title")}
+                onChange={(v) => t.set("title", v)}
+                placeholder={t.fallback("title")}
+                lang={locale}
+              />
             </Field>
             <Field label="organization">
               <TextInput
-                value={form.organization}
-                onChange={(v) => set("organization", v)}
+                value={t.value("organization")}
+                onChange={(v) => t.set("organization", v)}
+                placeholder={t.fallback("organization")}
+                lang={locale}
               />
             </Field>
             <Field label="location">
               <TextInput
-                value={form.location}
-                onChange={(v) => set("location", v)}
+                value={t.value("location")}
+                onChange={(v) => t.set("location", v)}
+                placeholder={t.fallback("location")}
+                lang={locale}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -198,16 +233,27 @@ export default function CVPage() {
 
           <Field label="description" hint="Markdown. Keep it to a sentence or two.">
             <TextArea
-              value={form.description_markdown}
-              onChange={(v) => set("description_markdown", v)}
+              value={t.value("description_markdown")}
+              onChange={(v) => t.set("description_markdown", v)}
+              placeholder={t.fallback("description_markdown")}
               rows={3}
+              lang={locale}
             />
           </Field>
 
-          <Field label="highlights" hint="Short bullets, one per entry.">
+          <Field
+            label="highlights"
+            hint={
+              locale === DEFAULT_LOCALE
+                ? "Short bullets, one per entry."
+                : "Short bullets. Leave empty to show all the English ones."
+            }
+          >
             <ListInput
-              values={form.highlights}
-              onChange={(v) => set("highlights", v)}
+              key={locale}
+              values={t.value("highlights")}
+              onChange={(v) => t.set("highlights", v)}
+              placeholder={t.fallback("highlights")?.join(", ") || undefined}
             />
           </Field>
 

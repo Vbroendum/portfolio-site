@@ -13,6 +13,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/admin/fields";
+import { LocaleTabs } from "@/components/admin/locale-tabs";
 import { MarkdownEditor } from "@/components/admin/markdown-editor";
 import { MediaPicker } from "@/components/admin/media-picker";
 import { AdminHeader } from "@/components/admin/shell";
@@ -22,7 +23,14 @@ import {
   revalidate,
   updatePost,
 } from "@/lib/api/admin";
-import type { PostInput, Status } from "@/lib/api/types";
+import type {
+  Locale,
+  PostInput,
+  PostTranslation,
+  Status,
+} from "@/lib/api/types";
+import { DEFAULT_LOCALE, localePath } from "@/lib/i18n/config";
+import { hasTranslation, translatable } from "@/lib/i18n/editing";
 
 const EMPTY: PostInput = {
   slug: "",
@@ -33,6 +41,13 @@ const EMPTY: PostInput = {
   tags: [],
   status: "draft",
   published_at: null,
+  translations: {},
+};
+
+const EMPTY_TRANSLATION: PostTranslation = {
+  title: "",
+  summary: "",
+  body_markdown: "",
 };
 
 /**
@@ -51,6 +66,8 @@ export default function PostEditor() {
     message?: string;
   }>({ kind: "idle" });
   const [loaded, setLoaded] = useState(isNew);
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const t = translatable(form, setForm, locale, EMPTY_TRANSLATION);
 
   useEffect(() => {
     if (isNew) return;
@@ -65,6 +82,7 @@ export default function PostEditor() {
           tags: post.tags,
           status: post.status,
           published_at: post.published_at ?? null,
+          translations: post.translations ?? {},
         }),
       )
       .catch((err: unknown) =>
@@ -106,7 +124,7 @@ export default function PostEditor() {
       <AdminHeader title={isNew ? "New post" : "Edit post"}>
         {!isNew && form.status === "published" ? (
           <Link
-            href={`/blog/${form.slug}`}
+            href={localePath(locale, `/blog/${form.slug}`)}
             target="_blank"
             className="font-mono text-[13px] text-muted no-underline hover:text-accent"
           >
@@ -121,11 +139,18 @@ export default function PostEditor() {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_17rem]">
         <div className="space-y-4">
+          <LocaleTabs
+            value={locale}
+            onChange={setLocale}
+            filled={{ da: hasTranslation(form.translations.da) }}
+          />
+
           <Field label="title">
             <TextInput
-              value={form.title}
-              onChange={(v) => set("title", v)}
-              placeholder="What is this post called?"
+              value={t.value("title")}
+              onChange={(v) => t.set("title", v)}
+              placeholder={t.fallback("title") || "What is this post called?"}
+              lang={locale}
             />
           </Field>
 
@@ -134,9 +159,11 @@ export default function PostEditor() {
             hint="Shown in the post list and used as the meta description."
           >
             <TextArea
-              value={form.summary}
-              onChange={(v) => set("summary", v)}
+              value={t.value("summary")}
+              onChange={(v) => t.set("summary", v)}
+              placeholder={t.fallback("summary")}
               rows={2}
+              lang={locale}
             />
           </Field>
 
@@ -145,8 +172,11 @@ export default function PostEditor() {
               body
             </span>
             <MarkdownEditor
-              value={form.body_markdown}
-              onChange={(v) => set("body_markdown", v)}
+              key={locale}
+              value={t.value("body_markdown")}
+              onChange={(v) => t.set("body_markdown", v)}
+              placeholder={t.fallback("body_markdown") || undefined}
+              lang={locale}
             />
           </div>
         </div>

@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/vbroendum/portfolio/api/internal/models"
 )
 
 // allowedSettingKeys keeps the settings table from becoming a junk drawer.
@@ -17,16 +19,25 @@ var allowedSettingKeys = map[string]bool{
 // handleGetSettings returns every settings blob in one call - the public site
 // needs them on every page render.
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	all, err := s.store.GetAllSettings(r.Context())
+	loc, ok := publicLocale(w, r)
+	if !ok {
+		return
+	}
+	s.getSettings(w, r, loc)
+}
+
+// handleAdminGetSettings is raw, translations included, for the CMS.
+func (s *Server) handleAdminGetSettings(w http.ResponseWriter, r *http.Request) {
+	s.getSettings(w, r, "")
+}
+
+func (s *Server) getSettings(w http.ResponseWriter, r *http.Request, loc models.Locale) {
+	all, err := s.store.GetAllSettings(r.Context(), loc)
 	if err != nil {
 		writeStoreErr(w, err, "settings")
 		return
 	}
 	writeJSON(w, http.StatusOK, all)
-}
-
-func (s *Server) handleAdminGetSettings(w http.ResponseWriter, r *http.Request) {
-	s.handleGetSettings(w, r)
 }
 
 func (s *Server) handlePutSetting(w http.ResponseWriter, r *http.Request) {

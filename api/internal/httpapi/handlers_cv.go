@@ -6,21 +6,31 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/vbroendum/portfolio/api/internal/models"
 	"github.com/vbroendum/portfolio/api/internal/store"
 )
 
 // handleListCV is public: a CV has nothing to hide behind a draft flag.
 func (s *Server) handleListCV(w http.ResponseWriter, r *http.Request) {
-	entries, err := s.store.ListCVEntries(r.Context(), r.URL.Query().Get("kind"))
+	loc, ok := publicLocale(w, r)
+	if !ok {
+		return
+	}
+	s.listCV(w, r, loc)
+}
+
+// handleAdminListCV is raw: the CMS edits every language at once.
+func (s *Server) handleAdminListCV(w http.ResponseWriter, r *http.Request) {
+	s.listCV(w, r, "")
+}
+
+func (s *Server) listCV(w http.ResponseWriter, r *http.Request, loc models.Locale) {
+	entries, err := s.store.ListCVEntries(r.Context(), r.URL.Query().Get("kind"), loc)
 	if err != nil {
 		writeStoreErr(w, err, "cv")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": entries})
-}
-
-func (s *Server) handleAdminListCV(w http.ResponseWriter, r *http.Request) {
-	s.handleListCV(w, r)
 }
 
 func (s *Server) handleCreateCV(w http.ResponseWriter, r *http.Request) {
@@ -98,5 +108,5 @@ func validateCV(w http.ResponseWriter, in store.CVEntryInput) bool {
 			"kind must be one of experience, education, skill, certification, other")
 		return false
 	}
-	return true
+	return validTranslations(w, in.Translations)
 }

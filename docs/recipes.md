@@ -7,11 +7,12 @@ file that has to move together.
 
 Say you want `projects.video_poster_url`.
 
-1. **Migration** - `api/internal/migrations/0002_project_video_poster.sql`:
+1. **Migration** - `api/internal/migrations/0003_project_video_poster.sql`
+   (the next free number):
    ```sql
    ALTER TABLE projects ADD COLUMN video_poster_url TEXT NOT NULL DEFAULT '';
    ```
-   Never edit `0001_init.sql`; it has already run.
+   Never edit a migration that has already run.
 2. **Model** - add the field to `models.Project` with its JSON tag.
 3. **Input** - add it to `store.ProjectInput`.
 4. **Queries** - add the column to `projectColumns`, to the `scanProject`
@@ -26,6 +27,15 @@ Say you want `projects.video_poster_url`.
 9. `cd api && go test ./...` and `cd web && npm run typecheck`.
 
 Restart the API; the migration applies at boot.
+
+**If the field is text a visitor reads** (it should exist in Danish too), it
+needs no column for the translation, but it does need:
+
+- the field on `models.ProjectTranslation` and the overlay line in
+  `localizeProject` (`api/internal/store/i18n.go`), plus a test case;
+- the field on `ProjectTranslation` in `web/lib/api/types.ts`;
+- the editor input wired through `t.value` / `t.set` / `t.fallback` instead of
+  `form` / `set`, and the key in `EMPTY_TRANSLATION`.
 
 ## Add a new demo type
 
