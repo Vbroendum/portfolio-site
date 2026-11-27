@@ -119,11 +119,13 @@ A rough rule: if someone can *use* it in a browser, iframe it. If they can only
 
 - **experience / education / certification** render as a timeline: dates on the
   left, role and organisation on the right.
-- **skill** entries render as chips. Put the skill in the title field. The
-  **organization** field doubles as a group label, so filling it with
-  `Core stack`, `Tools` or `Languages` buckets the chips under that heading;
-  leave it blank and they render as one row. Groups appear in the order their
-  first entry does, which is the sort order.
+- **skill** entries are whole categories, not single skills. Make one entry
+  per category: the **category** field is its label (`Core stack`,
+  `Familiar`, `Tools`) and **skills** is the list of chips under it, in the
+  order you type them. To add a skill, edit its category and add a chip. Sort
+  order arranges the categories. The form hides the dated fields for skills,
+  since they would not show. In Danish, translate the label, and either
+  translate the whole skills list or leave it empty to show the English one.
 - Tick **still here** for your current role - it shows as "now".
 - **Highlights** are short bullets. Two or three per role beats a paragraph.
 
