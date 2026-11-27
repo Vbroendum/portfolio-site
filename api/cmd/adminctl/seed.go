@@ -133,10 +133,15 @@ Hver todo-app, jeg prøvede, ville være en livsstil.
 			},
 		},
 	}, {
-		Kind:         models.CVSkill,
-		Title:        "Go, TypeScript, Postgres",
-		Organization: "",
-		SortOrder:    0,
+		// A skill entry is one category: the title labels it, the highlights
+		// are its skills.
+		Kind:       models.CVSkill,
+		Title:      "Core stack",
+		Highlights: []string{"Go", "TypeScript", "Postgres"},
+		SortOrder:  0,
+		Translations: map[models.Locale]models.CVEntryTranslation{
+			models.LocaleDA: {Title: "Kernestak"},
+		},
 	}}
 
 	for _, e := range cv {

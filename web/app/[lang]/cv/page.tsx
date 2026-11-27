@@ -95,39 +95,29 @@ export default async function CVPage({ params }: Props) {
 }
 
 /**
- * Skills are chips, optionally bucketed: a skill entry's `organization` field
- * doubles as its group label ("Core stack", "Tools", "Languages"). Leave the
- * field empty in the CMS and the chips render as one ungrouped row.
- *
- * Groups appear in the order their first entry does, which is `sort_order`, so
- * reordering a group means renumbering its entries.
+ * Each skill entry is one category: its title is the label ("Core stack",
+ * "Tools", "Languages") and its highlights are the skills, shown as chips.
+ * Categories follow `sort_order`; chips follow the order of the list. Leave
+ * the title empty and the chips render without a label.
  */
 function SkillGroups({ entries }: { entries: CVEntry[] }) {
-  const groups: { label: string; items: CVEntry[] }[] = [];
-  for (const entry of entries) {
-    const label = entry.organization;
-    const last = groups.at(-1);
-    if (last && last.label === label) last.items.push(entry);
-    else groups.push({ label, items: [entry] });
-  }
-
   return (
     <div className="space-y-5">
-      {groups.map((group) => (
+      {entries.map((entry) => (
         <div
-          key={group.label || "ungrouped"}
+          key={entry.id}
           className="grid gap-2 sm:grid-cols-[10rem_1fr] sm:gap-6"
         >
-          {group.label ? (
+          {entry.title ? (
             <p className="font-mono text-[13px] text-faint sm:pt-0.5">
-              {group.label}
+              {entry.title}
             </p>
           ) : (
             <span className="hidden sm:block" />
           )}
           <div className="flex flex-wrap gap-1.5">
-            {group.items.map((entry) => (
-              <Chip key={entry.id}>{entry.title}</Chip>
+            {entry.highlights.map((skill, i) => (
+              <Chip key={`${i}-${skill}`}>{skill}</Chip>
             ))}
           </div>
         </div>
@@ -175,7 +165,10 @@ function Entry({
         {entry.highlights.length > 0 ? (
           <ul className="mt-2 space-y-1 text-muted">
             {entry.highlights.map((h) => (
-              <li key={h} className="before:mr-2 before:text-faint before:content-['-']">
+              <li
+                key={h}
+                className="before:mr-2 before:text-faint before:content-['-']"
+              >
                 {h}
               </li>
             ))}

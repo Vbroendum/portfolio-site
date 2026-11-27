@@ -75,6 +75,9 @@ export default function CVPage() {
   }>({ kind: "idle" });
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const t = translatable(form, setForm, locale, EMPTY_TRANSLATION);
+  // A skill entry is a whole category: the title names it and the highlights
+  // are its skills, so the dated-entry fields would only be noise.
+  const isSkill = form.kind === "skill";
 
   async function refresh() {
     const res = await listCV();
@@ -181,8 +184,12 @@ export default function CVPage() {
               />
             </Field>
             <Field
-              label="title"
-              hint="The role, degree, or - for skills - the skill itself."
+              label={isSkill ? "category" : "title"}
+              hint={
+                isSkill
+                  ? "Core stack, Familiar, Tools - one entry per category."
+                  : "The role or degree."
+              }
             >
               <TextInput
                 value={t.value("title")}
@@ -191,62 +198,77 @@ export default function CVPage() {
                 lang={locale}
               />
             </Field>
-            <Field label="organization">
-              <TextInput
-                value={t.value("organization")}
-                onChange={(v) => t.set("organization", v)}
-                placeholder={t.fallback("organization")}
-                lang={locale}
-              />
-            </Field>
-            <Field label="location">
-              <TextInput
-                value={t.value("location")}
-                onChange={(v) => t.set("location", v)}
-                placeholder={t.fallback("location")}
-                lang={locale}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="start">
-                <TextInput
-                  type="date"
-                  value={form.start_date ?? ""}
-                  onChange={(v) => set("start_date", v || null)}
-                />
-              </Field>
-              <Field label="end">
-                <TextInput
-                  type="date"
-                  value={form.end_date ?? ""}
-                  onChange={(v) => set("end_date", v || null)}
-                />
-              </Field>
-            </div>
+            {isSkill ? null : (
+              <>
+                <Field label="organization">
+                  <TextInput
+                    value={t.value("organization")}
+                    onChange={(v) => t.set("organization", v)}
+                    placeholder={t.fallback("organization")}
+                    lang={locale}
+                  />
+                </Field>
+                <Field label="location">
+                  <TextInput
+                    value={t.value("location")}
+                    onChange={(v) => t.set("location", v)}
+                    placeholder={t.fallback("location")}
+                    lang={locale}
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="start">
+                    <TextInput
+                      type="date"
+                      value={form.start_date ?? ""}
+                      onChange={(v) => set("start_date", v || null)}
+                    />
+                  </Field>
+                  <Field label="end">
+                    <TextInput
+                      type="date"
+                      value={form.end_date ?? ""}
+                      onChange={(v) => set("end_date", v || null)}
+                    />
+                  </Field>
+                </div>
+              </>
+            )}
           </div>
 
-          <Toggle
-            checked={form.is_current}
-            onChange={(v) => set("is_current", v)}
-            label="still here (shows as 'now')"
-          />
+          {isSkill ? null : (
+            <>
+              <Toggle
+                checked={form.is_current}
+                onChange={(v) => set("is_current", v)}
+                label="still here (shows as 'now')"
+              />
 
-          <Field label="description" hint="Markdown. Keep it to a sentence or two.">
-            <TextArea
-              value={t.value("description_markdown")}
-              onChange={(v) => t.set("description_markdown", v)}
-              placeholder={t.fallback("description_markdown")}
-              rows={3}
-              lang={locale}
-            />
-          </Field>
+              <Field
+                label="description"
+                hint="Markdown. Keep it to a sentence or two."
+              >
+                <TextArea
+                  value={t.value("description_markdown")}
+                  onChange={(v) => t.set("description_markdown", v)}
+                  placeholder={t.fallback("description_markdown")}
+                  rows={3}
+                  lang={locale}
+                />
+              </Field>
+            </>
+          )}
 
           <Field
-            label="highlights"
+            label={isSkill ? "skills" : "highlights"}
             hint={
               locale === DEFAULT_LOCALE
-                ? "Short bullets, one per entry."
-                : "Short bullets. Leave empty to show all the English ones."
+                ? isSkill
+                  ? "One chip each, in this order. Comma or Enter adds one."
+                  : "Short bullets, one per entry."
+                : isSkill
+                  ? "Translated skills, in the same order. Leave empty to show the English ones."
+                  : "Short bullets. Leave empty to show all the English ones."
             }
           >
             <ListInput
@@ -288,14 +310,29 @@ export default function CVPage() {
                     onClick={() => startEdit(entry)}
                     className="min-w-0 flex-1 truncate text-left hover:text-accent"
                   >
-                    {entry.title}
-                    {entry.organization ? (
-                      <span className="text-muted"> · {entry.organization}</span>
+                    {entry.title ||
+                      (entry.kind === "skill" ? "(no category)" : "")}
+                    {entry.kind === "skill" ? (
+                      entry.highlights.length > 0 ? (
+                        <span className="text-muted">
+                          {" "}
+                          · {entry.highlights.join(", ")}
+                        </span>
+                      ) : null
+                    ) : entry.organization ? (
+                      <span className="text-muted">
+                        {" "}
+                        · {entry.organization}
+                      </span>
                     ) : null}
                   </button>
                   <span className="font-mono text-[12px] text-faint">
                     {entry.start_date ?? ""}
-                    {entry.is_current ? " → now" : entry.end_date ? ` → ${entry.end_date}` : ""}
+                    {entry.is_current
+                      ? " → now"
+                      : entry.end_date
+                        ? ` → ${entry.end_date}`
+                        : ""}
                   </span>
                   <button
                     type="button"

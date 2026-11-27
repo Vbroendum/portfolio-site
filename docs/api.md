@@ -149,6 +149,8 @@ Same five routes under `/api/v1/admin/projects`. Body:
 
 `kind` is one of `experience`, `education`, `skill`, `certification`, `other`.
 Dates are `YYYY-MM-DD` strings or null; `is_current: true` renders as "now".
+A `skill` entry is one category: `title` is its label and `highlights` its
+skills; the other fields are unused.
 
 ### Media
 
